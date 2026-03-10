@@ -5,9 +5,7 @@ import os
 import altair as alt
 
 from rdkit import Chem
-from rdkit.Chem import AllChem, Descriptors, rdMolDescriptors, Draw, QED, Crippen
-from rdkit.Chem import rdPartialCharges
-
+from rdkit.Chem import Descriptors, rdMolDescriptors, QED
 from Bio.PDB import PDBParser, NeighborSearch
 from Bio.PDB.Polypeptide import is_aa
 
@@ -15,27 +13,28 @@ import py3Dmol
 from stmol import showmol
 
 # -----------------------------
-# CONFIG
+# CONFIG & STATE
 # -----------------------------
+st.set_page_config(page_title="RNALigVS", layout="wide")
 
-st.set_page_config(
-    page_title="RNALigVS",
-    layout="wide"
-)
+# Initialize session state for persistence
+if 'pocket_features' not in st.session_state:
+    st.session_state.pocket_features = None
 
 LOGO_URL = "https://raw.githubusercontent.com/YOUR_USERNAME/RNALigVS/main/assets/rnaligvs_logo.png"
-
-RNA_NAMES = {"A","C","G","U","I","PSU","5MC","7MG"}
-IGNORE_RESIDUES = {"HOH","WAT"}
+RNA_NAMES = {"A", "C", "G", "U", "I", "PSU", "5MC", "7MG"}
+IGNORE_RESIDUES = {"HOH", "WAT"}
 
 # -----------------------------
 # HEADER
 # -----------------------------
-
-col1,col2 = st.columns([1,4])
-
+col1, col2 = st.columns([1, 4])
 with col1:
-    st.image(LOGO_URL,width=130)
+    # Use a placeholder if logo doesn't exist yet
+    try:
+        st.image(LOGO_URL, width=130)
+    except:
+        st.title("🧬")
 
 with col2:
     st.title("RNALigVS")
@@ -48,226 +47,168 @@ st.markdown("---")
 # -----------------------------
 
 def is_rna(res):
-
     return res.get_resname().strip() in RNA_NAMES
 
-
 def get_unique_ligands(structure):
+    ligands = []
+    for model in structure:
+        for chain in model:
+            for res in chain:
+                resname = res.get_resname().strip()
+                # A ligand is not RNA, not Water, and not Protein
+                if not is_rna(res) and resname not in IGNORE_RESIDUES and not is_aa(res):
+                    ligands.append(f"{resname} {chain.id}:{res.id[1]}")
+    return sorted(list(set(ligands)))
 
-    ligands=[]
+def extract_binding_pocket(structure, ligand_id, cutoff=6.0):
+    parts = ligand_id.split()
+    target_resname = parts[0]
+    chain_id, res_seq = parts[1].split(":")
+    
+    ligand_atoms = []
+    rna_atoms = []
 
     for model in structure:
         for chain in model:
             for res in chain:
+                if chain.id == chain_id and res.id[1] == int(res_seq):
+                    ligand_atoms.extend(list(res.get_atoms()))
+                elif is_rna(res):
+                    rna_atoms.extend(list(res.get_atoms()))
 
-                resname=res.get_resname().strip()
-
-                if not is_rna(res) and resname not in IGNORE_RESIDUES and not is_aa(res):
-
-                    ligands.append(f"{resname} {chain.id}:{res.id[1]}")
-
-    return sorted(list(set(ligands)))
-
-
-def extract_binding_pocket(structure,ligand_id,cutoff=6):
-
-    parts=ligand_id.split()
-    chain,res=parts[1].split(":")
-    res=int(res)
-
-    ligand_atoms=[]
-    rna_atoms=[]
-
-    for model in structure:
-        for chain_obj in model:
-            for res_obj in chain_obj:
-
-                if chain_obj.id==chain and res_obj.id[1]==res:
-                    ligand_atoms.extend(list(res_obj.get_atoms()))
-
-                if is_rna(res_obj):
-                    rna_atoms.extend(list(res_obj.get_atoms()))
-
-    ns=NeighborSearch(rna_atoms)
-
-    pocket_atoms=set()
-
+    if not ligand_atoms: return []
+    
+    ns = NeighborSearch(rna_atoms)
+    pocket_atoms = set()
     for atom in ligand_atoms:
-        neighbors=ns.search(atom.coord,cutoff)
+        neighbors = ns.search(atom.coord, cutoff)
         pocket_atoms.update(neighbors)
-
     return list(pocket_atoms)
 
-
 def calculate_pocket_features(atoms):
+    if not atoms: return {"Pocket_Rg": 1.0}
+    coords = np.array([a.coord for a in atoms])
+    center = coords.mean(axis=0)
+    rg = np.sqrt(np.mean(np.sum((coords - center)**2, axis=1)))
+    return {"Pocket_Rg": rg, "Center": center.tolist()}
 
-    coords=np.array([a.coord for a in atoms])
-
-    center=coords.mean(axis=0)
-
-    rg=np.sqrt(np.mean(np.sum((coords-center)**2,axis=1)))
-
-    return {"Pocket_Rg":rg,"All_Atoms":atoms}
-
-
-# -----------------------------
-# VISUALIZATION
-# -----------------------------
-
-def visualize(pdb_path,center=None):
-
-    with open(pdb_path) as f:
-        pdb=f.read()
-
-    view=py3Dmol.view(width=700,height=500)
-
-    view.addModel(pdb,"pdb")
-
-    view.setStyle({"cartoon":{"color":"spectrum"}})
-
+def visualize_mol(pdb_path, center=None):
+    with open(pdb_path, "r") as f:
+        pdb_data = f.read()
+    
+    view = py3Dmol.view(width=700, height=500)
+    view.addModel(pdb_data, "pdb")
+    view.setStyle({"cartoon": {"color": "spectrum"}})
+    view.setStyle({'resn': list(RNA_NAMES)}, {"cartoon": {"color": "orange"}})
+    
     if center:
-
-        x,y,z=center
-
         view.addSphere({
-            "center":{"x":x,"y":y,"z":z},
-            "radius":1.5,
-            "color":"green"
+            "center": {"x": center[0], "y": center[1], "z": center[2]},
+            "radius": 2.0,
+            "color": "red",
+            "opacity": 0.7
         })
-
     view.zoomTo()
-
     return view
 
-
 # -----------------------------
-# SIDEBAR INPUT
+# SIDEBAR & LOGIC
 # -----------------------------
-
 st.sidebar.header("1️⃣ Upload RNA Structure")
-
-pdb_file=st.sidebar.file_uploader("Upload PDB",type="pdb")
+pdb_file = st.sidebar.file_uploader("Upload PDB", type="pdb")
 
 if pdb_file:
-
-    with open("structure.pdb","wb") as f:
+    # Save temp file
+    with open("temp_struct.pdb", "wb") as f:
         f.write(pdb_file.getbuffer())
 
-    parser=PDBParser(QUIET=True)
-
-    struct=parser.get_structure("RNA","structure.pdb")
-
-    ligands=get_unique_ligands(struct)
+    parser = PDBParser(QUIET=True)
+    struct = parser.get_structure("RNA", "temp_struct.pdb")
+    ligands = get_unique_ligands(struct)
 
     st.sidebar.header("2️⃣ Pocket Definition")
-
+    
     if ligands:
-
-        ligand=st.sidebar.selectbox("Ligand",ligands)
-
-        pocket_atoms=extract_binding_pocket(struct,ligand)
-
-        pocket_features=calculate_pocket_features(pocket_atoms)
-
-        st.sidebar.success("Pocket detected automatically")
-
-        pocket_center=None
-
+        selected_ligand = st.sidebar.selectbox("Choose reference ligand", ligands)
+        p_atoms = extract_binding_pocket(struct, selected_ligand)
+        st.session_state.pocket_features = calculate_pocket_features(p_atoms)
+        st.sidebar.success(f"Pocket Rg: {st.session_state.pocket_features['Pocket_Rg']:.2f} Å")
     else:
-
-        st.sidebar.warning("No ligand found")
-
-        x=st.sidebar.number_input("Pocket X",0.0)
-        y=st.sidebar.number_input("Pocket Y",0.0)
-        z=st.sidebar.number_input("Pocket Z",0.0)
-
-        radius=st.sidebar.slider("Radius",3,10,6)
-
-        pocket_center=(x,y,z)
-
-        atoms=[a for a in struct.get_atoms()]
-
-        ns=NeighborSearch(atoms)
-
-        pocket_atoms=ns.search(np.array(pocket_center),radius)
-
-        pocket_features=calculate_pocket_features(pocket_atoms)
+        st.sidebar.warning("No ligand found. Define center manually.")
+        px = st.sidebar.number_input("X", 0.0)
+        py = st.sidebar.number_input("Y", 0.0)
+        pz = st.sidebar.number_input("Z", 0.0)
+        rad = st.sidebar.slider("Radius", 3, 12, 6)
+        
+        all_atoms = list(struct.get_atoms())
+        ns = NeighborSearch(all_atoms)
+        p_atoms = ns.search(np.array([px, py, pz]), rad)
+        st.session_state.pocket_features = calculate_pocket_features(p_atoms)
+        # Update center to manual input
+        st.session_state.pocket_features["Center"] = [px, py, pz]
 
 # -----------------------------
-# VISUALIZATION
+# MAIN DISPLAY
 # -----------------------------
-
 if pdb_file:
-
-    st.subheader("3D RNA Structure")
-
-    view=visualize("structure.pdb",pocket_center)
-
-    showmol(view,height=500,width=700)
+    st.subheader("3D RNA Structure Visualization")
+    ctr = st.session_state.pocket_features.get("Center") if st.session_state.pocket_features else None
+    view = visualize_mol("temp_struct.pdb", center=ctr)
+    showmol(view, height=500, width=700)
 
     st.markdown("---")
-
-# -----------------------------
-# VIRTUAL SCREENING
-# -----------------------------
-
-if pdb_file:
-
     st.subheader("Virtual Screening")
+    
+    smiles_input = st.text_area("Enter SMILES library (one per line)", 
+                               "c1ccccc1\nCC(=O)Oc1ccccc1C(=O)O", height=150)
 
-    smiles_text=st.text_area("Enter SMILES library")
+    if st.button("🚀 Run Screening"):
+        if not st.session_state.pocket_features:
+            st.error("Please define a pocket first!")
+        else:
+            results = []
+            lines = [l.strip() for l in smiles_input.splitlines() if l.strip()]
+            
+            progress_bar = st.progress(0)
+            for i, smi in enumerate(lines):
+                mol = Chem.MolFromSmiles(smi)
+                if mol:
+                    mw = Descriptors.MolWt(mol)
+                    logp = Descriptors.MolLogP(mol)
+                    qed_val = QED.qed(mol)
+                    
+                    # Estimate shape fit based on Radius of Gyration
+                    mol_rg = rdMolDescriptors.CalcRadiusOfGyration(mol)
+                    pocket_rg = st.session_state.pocket_features["Pocket_Rg"]
+                    
+                    # Simple shape similarity score
+                    shape_score = 1 - (abs(mol_rg - pocket_rg) / (pocket_rg + 0.1))
+                    prob = max(0.01, min(0.99, shape_score * qed_val))
 
-    library={}
+                    results.append({
+                        "Ligand": f"Mol_{i+1}",
+                        "SMILES": smi,
+                        "Prob_Score": round(prob, 3),
+                        "MW": round(mw, 2),
+                        "LogP": round(logp, 2),
+                        "QED": round(qed_val, 2)
+                    })
+                progress_bar.progress((i + 1) / len(lines))
 
-    if smiles_text:
+            if results:
+                df = pd.DataFrame(results).sort_values("Prob_Score", ascending=False)
+                
+                c1, c2 = st.columns([2, 1])
+                with c1:
+                    st.dataframe(df, use_container_width=True)
+                with c2:
+                    chart = alt.Chart(df).mark_bar().encode(
+                        x=alt.X("Prob_Score", title="Binding Probability"),
+                        y=alt.Y("Ligand", sort='-x'),
+                        color=alt.Color("Prob_Score", scale=alt.Scale(scheme='viridis'))
+                    ).properties(height=300)
+                    st.altair_chart(chart, use_container_width=True)
 
-        for i,line in enumerate(smiles_text.splitlines()):
-
-            library[f"Mol_{i}"]=line.strip()
-
-    if st.button("Run Screening"):
-
-        results=[]
-
-        for name,smi in library.items():
-
-            mol=Chem.MolFromSmiles(smi)
-
-            if mol:
-
-                mw=Descriptors.MolWt(mol)
-
-                logp=Descriptors.MolLogP(mol)
-
-                qed=QED.qed(mol)
-
-                rg=rdMolDescriptors.CalcRadiusOfGyration(mol)
-
-                shape=1-abs(rg-pocket_features["Pocket_Rg"])/(pocket_features["Pocket_Rg"]+0.1)
-
-                prob=max(0,min(1,shape*qed))
-
-                results.append({
-                    "Ligand":name,
-                    "Probability":prob,
-                    "MW":mw,
-                    "LogP":logp,
-                    "QED":qed
-                })
-
-        df=pd.DataFrame(results).sort_values("Probability",ascending=False)
-
-        st.dataframe(df)
-
-        chart=alt.Chart(df).mark_bar().encode(
-            x="Probability",
-            y="Ligand"
-        )
-
-        st.altair_chart(chart,use_container_width=True)
-
-        st.download_button(
-            "Download Results",
-            df.to_csv(index=False),
-            "results.csv"
-        )
+                st.download_button("Download CSV", df.to_csv(index=False), "results.csv", "text/csv")
+            else:
+                st.error("No valid SMILES strings provided.")
