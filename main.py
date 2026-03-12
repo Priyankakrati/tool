@@ -301,6 +301,7 @@ def visualize_pdb_with_ligand(pdb_path, selected_ligand_id=None):
 
 def add_pocket_atoms_to_view(view, pocket_feats, show_phosphate, show_polar):
 
+    st.session_state.pocket_features,
     if pocket_feats is None:
         return view
 
@@ -576,6 +577,7 @@ elif st.session_state.page == "analysis":
                         m3, m4 = st.columns(2)
                         m3.metric("Molar Refractivity", f"{row.get('MR', 0):.2f}")
                         m4.metric("Aromatic Rings", f"{row.get('AromaticRings', 0)}")
+
 
 
 
