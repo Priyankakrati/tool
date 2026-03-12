@@ -1,7 +1,3 @@
-
-
-
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -534,15 +530,15 @@ view = add_pocket_atoms_to_view(
 
 showmol(view, height=500, width=800)
         
-        with c_data:
-            if st.session_state.pocket_features:
-                pf = st.session_state.pocket_features
-                st.markdown("#### Pocket Physics")
-                st.metric("Pocket Radius (Rg)", f"{pf['Pocket_Rg']:.2f} Å")
-                st.metric("Curvature Score", f"{pf['Pocket_Curvature']:.2f}")
-                st.metric("Phosphate Sites", len(pf['Neg_Oxygens']))
-                st.metric("Polar Atoms", len(pf['Polar_Atoms']))
-                pocket_physics_explainer()
+    with c_data:
+        if st.session_state.pocket_features:
+            pf = st.session_state.pocket_features
+                 st.markdown("#### Pocket Physics")
+                 st.metric("Pocket Radius (Rg)", f"{pf['Pocket_Rg']:.2f} Å")
+                 st.metric("Curvature Score", f"{pf['Pocket_Curvature']:.2f}")
+                 st.metric("Phosphate Sites", len(pf['Neg_Oxygens']))
+                 st.metric("Polar Atoms", len(pf['Polar_Atoms']))
+                 pocket_physics_explainer()
 
         st.markdown("---")
         st.subheader("Virtual Screening")
@@ -615,3 +611,4 @@ showmol(view, height=500, width=800)
                         m3, m4 = st.columns(2)
                         m3.metric("Molar Refractivity", f"{row.get('MR', 0):.2f}")
                         m4.metric("Aromatic Rings", f"{row.get('AromaticRings', 0)}")
+
