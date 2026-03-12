@@ -53,8 +53,6 @@ st.markdown("""
     .feature-text { color: #7F8C8D; font-size: 0.95rem; line-height: 1.5; }
     </style>
     """, unsafe_allow_html=True)
-LOGO_URL = "https://raw.githubusercontent.com/YOUR_USERNAME/RNALigVS/main/assets/rnaligvs_logo.png" RNA_NAMES = {"A", "C", "G", "U", "I", "PSU", "5MC", "7MG"} IGNORE_RESIDUES = {"HOH", "WAT"} # ----------------------------- # HEADER # ----------------------------- col1, col2 = st.columns([1, 4]) with col1: # Use a placeholder if logo doesn't exist yet try: st.image(LOGO_URL, width=130) except: st.title("🧬") with col2: st.title("RNALigVS") st.markdown("### RNA–Ligand Virtual Screening Platform") st.markdown("---")
-# Constants
 RNA_NAMES = {"A", "C", "G", "U", "I", "PSU", "5MC", "7MG"} 
 MOD2CANON = {"U":"U","PSU":"U","5MU":"U","A":"A","1MA":"A","G":"G","2MG":"G","C":"C","5MC":"C","I":"G"}
 IGNORE_RESIDUES = {"HOH", "WAT"}
