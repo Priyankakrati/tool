@@ -1,7 +1,3 @@
-
-
-
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -654,3 +650,4 @@ elif st.session_state.page == "analysis":
                         m3, m4 = st.columns(2)
                         m3.metric("Molar Refractivity", f"{row.get('MR', 0):.2f}")
                         m4.metric("Aromatic Rings", f"{row.get('AromaticRings', 0)}")
+
