@@ -363,24 +363,91 @@ def go_home(): st.session_state.page = "home"
 
 # --- HOME PAGE ---
 if st.session_state.page == "home":
-    c_logo, c_title = st.columns([1, 4])
+
+    LOGO_URL = "https://raw.githubusercontent.com/Priyankakrati/tool/main/RNALigVS_logo.png"
+
+    c_logo, c_title = st.columns([1,4])
+
     with c_logo:
-        st.markdown("""<div style="background-color:#ECF0F1;height:120px;width:120px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px dashed #BDC3C7;"><span style="color:#95A5A6;font-weight:bold;">LOGO</span></div>""", unsafe_allow_html=True)
+        st.image(LOGO_URL, width=140)
+
     with c_title:
         st.title("RNALigVS: A Virtual screening tool for RNA and small molecules")
         st.markdown("### Structure-Based RNA Virtual Screening")
-    
-    st.markdown("---")
-    st.markdown("RNALigVS automates the screening of small molecules against RNA targets using biophysical principles.")
-    
-    c1, c2, c3, c4 = st.columns(4)
-    with c1: st.markdown('<div class="feature-card">⚡<br><b>Electrostatics</b></div>', unsafe_allow_html=True)
-    with c2: st.markdown('<div class="feature-card">🥞<br><b>Pi-Stacking</b></div>', unsafe_allow_html=True)
-    with c3: st.markdown('<div class="feature-card">📐<br><b>Shape Fit</b></div>', unsafe_allow_html=True)
-    with c4: st.markdown('<div class="feature-card">💊<br><b>Drug Likeness</b></div>', unsafe_allow_html=True)
 
-    st.write("##")
-    c_btn = st.columns([1, 2, 1])
+    st.markdown("---")
+
+    st.markdown("""
+RNALigVS is an **RNA-focused virtual screening platform** that evaluates small molecules using
+biophysical interaction principles derived from RNA–ligand structural data.
+
+The tool automatically:
+
+• identifies the RNA binding pocket  
+• extracts pocket physicochemical features  
+• evaluates ligand compatibility using physics-informed scoring
+""")
+
+    st.write("")
+
+    # Feature Cards
+    c1, c2, c3, c4 = st.columns(4)
+
+    with c1:
+        st.markdown("""
+        <div class="feature-card">
+        <div class="feature-icon">⚡</div>
+        <div class="feature-title">Electrostatics</div>
+        <div class="feature-text">
+        RNA backbones contain negatively charged phosphate groups. 
+        RNALigVS evaluates electrostatic attraction between ligand charges 
+        and these phosphate oxygens to estimate binding compatibility.
+        </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with c2:
+        st.markdown("""
+        <div class="feature-card">
+        <div class="feature-icon">🥞</div>
+        <div class="feature-title">π-Stacking</div>
+        <div class="feature-text">
+        Aromatic ligands often interact with RNA bases through 
+        π-stacking interactions with purine bases (adenine and guanine), 
+        stabilizing ligand binding within the RNA pocket.
+        </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with c3:
+        st.markdown("""
+        <div class="feature-card">
+        <div class="feature-icon">📐</div>
+        <div class="feature-title">Shape Complementarity</div>
+        <div class="feature-text">
+        Ligand geometry is compared with RNA pocket geometry using 
+        radius-of-gyration and spatial distribution metrics to 
+        evaluate structural compatibility.
+        </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with c4:
+        st.markdown("""
+        <div class="feature-card">
+        <div class="feature-icon">💊</div>
+        <div class="feature-title">Drug-Likeness</div>
+        <div class="feature-text">
+        RNALigVS integrates drug-likeness metrics such as 
+        QED score and Lipinski rules to prioritize 
+        biologically viable small-molecule candidates.
+        </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.write("")
+
+    c_btn = st.columns([1,2,1])
     with c_btn[1]:
         st.button("Start Analysis 🚀", on_click=go_analysis, use_container_width=True)
 
@@ -585,6 +652,7 @@ elif st.session_state.page == "analysis":
                         m3, m4 = st.columns(2)
                         m3.metric("Molar Refractivity", f"{row.get('MR', 0):.2f}")
                         m4.metric("Aromatic Rings", f"{row.get('AromaticRings', 0)}")
+
 
 
 
