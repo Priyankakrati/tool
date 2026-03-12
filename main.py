@@ -273,30 +273,39 @@ def process_library(library_dict, pocket_feats):
     if not results: return None
     return pd.DataFrame(results).sort_values("Binding Probability", ascending=False)
 
-def visualize_pdb_with_ligand(pdb_path, selected_ligand_id=None):
-    with open(pdb_path, 'r') as f: pdb_data = f.read()
+def visualize_pdb_with_ligand(pdb_path, selected_ligand_id=None, show_surface=True):
+    with open(pdb_path, 'r') as f:
+        pdb_data = f.read()
     
     view = py3Dmol.view(width=800, height=500)
     view.addModel(pdb_data, 'pdb')
     view.setBackgroundColor('white')
     
+    # RNA cartoon
     view.setStyle({'cartoon': {'color': 'spectrum', 'opacity': 0.8}})
-    view.addSurface(py3Dmol.VDW, {'opacity': 0.3, 'color': 'white'})
+    
+    # Optional surface
+    if show_surface:
+        view.addSurface(py3Dmol.VDW, {'opacity': 0.3, 'color': 'white'})
     
     if selected_ligand_id:
         try:
-            parts = selected_ligand_id.split() 
-            chain_res = parts[1].split(':') 
+            parts = selected_ligand_id.split()
+            chain_res = parts[1].split(':')
             chain_id = chain_res[0]
             res_num = int(chain_res[1])
+            
             sel = {'chain': chain_id, 'resi': res_num}
             
             view.addStyle(sel, {'stick': {'colorscheme': 'greenCarbon', 'radius': 0.4}})
             view.addStyle(sel, {'sphere': {'scale': 0.3, 'color': 'lime'}})
+            
             view.zoomTo(sel)
-        except: view.zoomTo()
+        except:
+            view.zoomTo()
     else:
         view.zoomTo()
+
     return view
 
 def add_pocket_atoms_to_view(view, pocket_feats, show_phosphate, show_polar):
@@ -433,12 +442,15 @@ elif st.session_state.page == "analysis":
             st.subheader("3D Pocket View")
 
             # Visualization controls
+            show_surface = st.checkbox("Show RNA Surface", value=True)
+
             show_phosphate = st.checkbox("Show Phosphate Atoms (Backbone Oxygens)")
             show_polar = st.checkbox("Show Polar Atoms (Hydrogen-bonding sites)")
 
             view = visualize_pdb_with_ligand(
                 st.session_state.current_pdb_path,
                 st.session_state.selected_ligand_id
+                show_surface
             )
 
             view = add_pocket_atoms_to_view(
@@ -575,6 +587,7 @@ elif st.session_state.page == "analysis":
                         m3, m4 = st.columns(2)
                         m3.metric("Molar Refractivity", f"{row.get('MR', 0):.2f}")
                         m4.metric("Aromatic Rings", f"{row.get('AromaticRings', 0)}")
+
 
 
 
