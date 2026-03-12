@@ -300,17 +300,21 @@ def visualize_pdb_with_ligand(pdb_path, selected_ligand_id=None):
     return view
 
 def add_pocket_atoms_to_view(view, pocket_feats, show_phosphate, show_polar):
+
     if pocket_feats is None:
         return view
+
+    # Dim the RNA surface slightly to highlight pocket atoms
+    view.setStyle({'cartoon': {'opacity': 0.3}})
 
     if show_phosphate:
         for atom in pocket_feats["Neg_Oxygens"]:
             c = atom.coord
             view.addSphere({
                 "center": {"x": float(c[0]), "y": float(c[1]), "z": float(c[2])},
-                "radius": 0.6,
+                "radius": 0.7,
                 "color": "red",
-                "opacity": 0.9
+                "opacity": 1.0
             })
 
     if show_polar:
@@ -318,10 +322,11 @@ def add_pocket_atoms_to_view(view, pocket_feats, show_phosphate, show_polar):
             c = atom.coord
             view.addSphere({
                 "center": {"x": float(c[0]), "y": float(c[1]), "z": float(c[2])},
-                "radius": 0.5,
+                "radius": 0.6,
                 "color": "blue",
-                "opacity": 0.8
+                "opacity": 1.0
             })
+
     return view
 
 def pocket_physics_explainer():
@@ -571,5 +576,6 @@ elif st.session_state.page == "analysis":
                         m3, m4 = st.columns(2)
                         m3.metric("Molar Refractivity", f"{row.get('MR', 0):.2f}")
                         m4.metric("Aromatic Rings", f"{row.get('AromaticRings', 0)}")
+
 
 
