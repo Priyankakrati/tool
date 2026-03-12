@@ -281,7 +281,7 @@ def visualize_pdb_with_ligand(pdb_path, selected_ligand_id=None):
     view.setBackgroundColor('white')
     
     view.setStyle({'cartoon': {'color': 'spectrum', 'opacity': 0.8}})
-    view.addSurface(py3Dmol.VDW, {'opacity': 0.3, 'color': 'white'})
+    view.addSurface(py3Dmol.VDW, {'opacity': 0.1, 'color': 'white'})
     
     if selected_ligand_id:
         try:
@@ -571,3 +571,4 @@ elif st.session_state.page == "analysis":
                         m3, m4 = st.columns(2)
                         m3.metric("Molar Refractivity", f"{row.get('MR', 0):.2f}")
                         m4.metric("Aromatic Rings", f"{row.get('AromaticRings', 0)}")
+
