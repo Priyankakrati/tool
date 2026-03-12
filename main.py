@@ -449,7 +449,7 @@ elif st.session_state.page == "analysis":
 
             view = visualize_pdb_with_ligand(
                 st.session_state.current_pdb_path,
-                st.session_state.selected_ligand_id
+                st.session_state.selected_ligand_id,
                 show_surface
             )
 
@@ -587,6 +587,7 @@ elif st.session_state.page == "analysis":
                         m3, m4 = st.columns(2)
                         m3.metric("Molar Refractivity", f"{row.get('MR', 0):.2f}")
                         m4.metric("Aromatic Rings", f"{row.get('AromaticRings', 0)}")
+
 
 
 
