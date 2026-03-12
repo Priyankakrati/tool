@@ -304,9 +304,7 @@ def add_pocket_atoms_to_view(view, pocket_feats, show_phosphate, show_polar):
     if pocket_feats is None:
         return view
 
-    # Dim the RNA surface slightly to highlight pocket atoms
-    view.setStyle({'cartoon': {'opacity': 0.3}})
-
+    # Highlight phosphate atoms
     if show_phosphate:
         for atom in pocket_feats["Neg_Oxygens"]:
             c = atom.coord
@@ -317,12 +315,13 @@ def add_pocket_atoms_to_view(view, pocket_feats, show_phosphate, show_polar):
                 "opacity": 1.0
             })
 
+    # Highlight polar atoms
     if show_polar:
         for atom in pocket_feats["Polar_Atoms"]:
             c = atom.coord
             view.addSphere({
                 "center": {"x": float(c[0]), "y": float(c[1]), "z": float(c[2])},
-                "radius": 0.6,
+                "radius": 0.55,
                 "color": "blue",
                 "opacity": 1.0
             })
@@ -576,6 +575,7 @@ elif st.session_state.page == "analysis":
                         m3, m4 = st.columns(2)
                         m3.metric("Molar Refractivity", f"{row.get('MR', 0):.2f}")
                         m4.metric("Aromatic Rings", f"{row.get('AromaticRings', 0)}")
+
 
 
 
