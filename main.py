@@ -376,99 +376,198 @@ if st.session_state.page == "home":
 # --- ANALYSIS PAGE ---
 elif st.session_state.page == "analysis":
     c1, c2 = st.columns([4, 1])
-    with c1: st.title("Analysis Workspace")
-    with c2: st.button("← Back", on_click=go_home)
+    with c1: 
+        st.title("Analysis Workspace")
+    with c2: 
+        st.button("← Back", on_click=go_home)
 
     with st.sidebar:
         st.header("1. Structure")
         mode = st.radio("Input", ["Fetch PDB", "Upload"])
+        
         if mode == "Fetch PDB":
             pid = st.text_input("PDB ID", "4GXY").upper()
             if st.button("Fetch"):
                 with st.spinner("Downloading..."):
                     path = fetch_pdb_safe(pid)
-                    if path: st.session_state.current_pdb_path = path
+                    if path: 
+                        st.session_state.current_pdb_path = path
+
         else:
             up = st.file_uploader("PDB File", type="pdb")
             if up and st.button("Process"):
-                with open("uploaded.pdb", "wb") as f: f.write(up.getbuffer())
+                with open("uploaded.pdb", "wb") as f: 
+                    f.write(up.getbuffer())
                 st.session_state.current_pdb_path = "uploaded.pdb"
 
         if st.session_state.current_pdb_path:
             parser = PDBParser(QUIET=True)
             struct = parser.get_structure("RNA", st.session_state.current_pdb_path)
             ligands = get_unique_ligands(struct)
+            
             if ligands:
                 st.session_state.available_ligands = ligands
+                st.markdown("---")
                 st.subheader("2. Pocket")
+
                 sel_lig = st.selectbox("Target Ligand", ligands)
                 st.session_state.selected_ligand_id = sel_lig
+                
                 p_atoms, l_atoms = extract_binding_pocket(struct, sel_lig)
+
                 if p_atoms:
                     st.session_state.pocket_features = calculate_pocket_features(p_atoms)
                     st.success(f"Pocket defined ({len(p_atoms)} atoms)")
+            else:
+                st.error("No ligands found.")
 
     if st.session_state.current_pdb_path:
+
         c_viz, c_data = st.columns([2, 1])
+
         with c_viz:
             st.subheader("3D Pocket View")
-            show_phos = st.checkbox("Show Phosphate Atoms")
-            show_pol = st.checkbox("Show Polar Atoms")
-            view = visualize_pdb_with_ligand(st.session_state.current_pdb_path, st.session_state.selected_ligand_id)
-            view = add_pocket_atoms_to_view(view, st.session_state.pocket_features, show_phos, show_pol)
+
+            # Visualization controls
+            show_phosphate = st.checkbox("Show Phosphate Atoms (Backbone Oxygens)")
+            show_polar = st.checkbox("Show Polar Atoms (Hydrogen-bonding sites)")
+
+            view = visualize_pdb_with_ligand(
+                st.session_state.current_pdb_path,
+                st.session_state.selected_ligand_id
+            )
+
+            view = add_pocket_atoms_to_view(
+                view,
+                st.session_state.pocket_features,
+                show_phosphate,
+                show_polar
+            )
+
             showmol(view, height=500, width=800)
-        
+
         with c_data:
+
             if st.session_state.pocket_features:
+
                 pf = st.session_state.pocket_features
+
                 st.markdown("#### Pocket Physics")
+
                 st.metric("Pocket Radius (Rg)", f"{pf['Pocket_Rg']:.2f} Å")
                 st.metric("Curvature Score", f"{pf['Pocket_Curvature']:.2f}")
                 st.metric("Phosphate Sites", len(pf['Neg_Oxygens']))
                 st.metric("Polar Atoms", len(pf['Polar_Atoms']))
+
                 pocket_physics_explainer()
 
         st.markdown("---")
         st.subheader("Virtual Screening")
+
         c_in, c_res = st.columns([1, 2])
-        library = {}
+
         with c_in:
             st.markdown("#### Library")
+
             tab_t, tab_c = st.tabs(["Text", "CSV"])
+
+            library = {}
+
             with tab_t:
                 txt = st.text_area("SMILES", height=150)
+
                 if txt:
                     for i, l in enumerate(txt.splitlines()):
-                        if l.strip(): library[f"Mol_{i}"] = l.strip()
+                        if l.strip():
+                            library[f"Mol_{i}"] = l.strip()
+
             with tab_c:
                 csv = st.file_uploader("CSV", type="csv")
+
                 if csv:
-                    df_csv = pd.read_csv(csv)
-                    if 'name' in df_csv.columns and 'smiles' in df_csv.columns:
-                        library = dict(zip(df_csv["name"], df_csv["smiles"]))
+                    df = pd.read_csv(csv)
+
+                    if 'names' in df.columns:
+                        df.rename(columns={'names': 'name'}, inplace=True)
+
+                    if 'name' in df.columns and 'smiles' in df.columns:
+                        library = dict(zip(df["name"], df["smiles"]))
+                    else:
+                        st.error("CSV must have 'name' and 'smiles'")
 
             if st.button("Run Screening", type="primary"):
+
                 if library and st.session_state.pocket_features:
-                    st.session_state.screening_results = process_library(library, st.session_state.pocket_features)
+
+                    with st.spinner("Running simulations..."):
+
+                        st.session_state.screening_results = process_library(
+                            library,
+                            st.session_state.pocket_features
+                        )
 
         with c_res:
+
             if st.session_state.screening_results is not None:
-                df_res = st.session_state.screening_results
-                chart = alt.Chart(df_res).mark_bar().encode(x=alt.X("Binding Probability", bin=True), y='count()', color=alt.value("#2980B9"))
+
+                df = st.session_state.screening_results
+
+                chart = alt.Chart(df).mark_bar().encode(
+                    x=alt.X("Binding Probability", bin=True),
+                    y='count()',
+                    color=alt.value("#2980B9")
+                )
+
                 st.altair_chart(chart, use_container_width=True)
-                
+
                 top_n = st.slider("Top Hits", 5, 50, 10)
-                st.dataframe(df_res.head(top_n), use_container_width=True, hide_index=True)
-                
+
+                st.dataframe(
+                    df.head(top_n),
+                    column_config={
+                        "Binding Probability": st.column_config.ProgressColumn(
+                            "Probability", format="%.2f", min_value=0, max_value=1
+                        ),
+                        "QED": st.column_config.NumberColumn("QED", format="%.2f"),
+                        "SMILES": None
+                    },
+                    use_container_width=True,
+                    hide_index=True
+                )
+
+                csv_data = df.to_csv(index=False).encode('utf-8')
+
+                st.download_button(
+                    "Download Full CSV",
+                    csv_data,
+                    "results.csv",
+                    "text/csv"
+                )
+
                 st.markdown("#### Detailed Inspector")
-                sel_id = st.selectbox("Select Molecule", df_res.head(top_n)["Ligand ID"])
+
+                sel_id = st.selectbox(
+                    "Select Molecule",
+                    df.head(top_n)["Ligand ID"]
+                )
+
                 if sel_id:
-                    row = df_res[df_res["Ligand ID"] == sel_id].iloc[0]
+
+                    row = df[df["Ligand ID"] == sel_id].iloc[0]
+
                     c_im, c_tx = st.columns([1, 2])
+
                     with c_im:
-                        mol_img = Chem.MolFromSmiles(row["SMILES"])
-                        if mol_img: st.image(Draw.MolToImage(mol_img, size=(250, 250)))
+                        mol = Chem.MolFromSmiles(row["SMILES"])
+                        st.image(Draw.MolToImage(mol, size=(250, 250)))
+
                     with c_tx:
                         st.markdown(f"**Score:** `{row['Binding Probability']:.2f}`")
-                        st.metric("QED", f"{row.get('QED', 0):.2f}")
-                        st.metric("Lipinski Failures", f"{row.get('Lipinski_Violations', 0)}")
+
+                        m1, m2 = st.columns(2)
+                        m1.metric("QED (Drug-likeness)", f"{row.get('QED', 0):.2f}")
+                        m2.metric("Lipinski Failures", f"{row.get('Lipinski_Violations', 0)}")
+
+                        m3, m4 = st.columns(2)
+                        m3.metric("Molar Refractivity", f"{row.get('MR', 0):.2f}")
+                        m4.metric("Aromatic Rings", f"{row.get('AromaticRings', 0)}")
