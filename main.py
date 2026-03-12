@@ -13,12 +13,13 @@ import py3Dmol
 from stmol import showmol
 
 
+# -----------------------------
+# CONFIG
+# -----------------------------
 st.set_page_config(page_title="RNALigVS", layout="wide")
 
-
-RNA_NAMES={"A","C","G","U","I","PSU","5MC","7MG"}
-IGNORE_RESIDUES={"HOH","WAT"}
-
+RNA_NAMES = {"A","C","G","U","I","PSU","5MC","7MG"}
+IGNORE_RESIDUES = {"HOH","WAT"}
 
 if "page" not in st.session_state:
     st.session_state.page="home"
@@ -28,57 +29,35 @@ if "pocket_features" not in st.session_state:
 
 
 # -----------------------------
-# HOME PAGE
+# INTRODUCTION PAGE
 # -----------------------------
-
 if st.session_state.page=="home":
 
     st.title("RNALigVS")
-    st.subheader("RNA–Ligand Virtual Screening Platform")
 
     st.markdown("""
-RNALigVS performs **structure-based virtual screening against RNA targets**.
+### RNA–Ligand Virtual Screening Platform
 
-The tool detects RNA binding pockets using structural proximity
-and evaluates ligands based on pocket compatibility.
+RNALigVS provides an interactive environment for:
+
+• RNA binding pocket detection  
+• Pocket geometry analysis  
+• Phosphate interaction detection  
+• Polar atom mapping  
+• Virtual screening of small molecules
+
+Click **Start Analysis** to begin.
 """)
 
-    c1,c2,c3,c4=st.columns(4)
+    if st.button("Start Analysis"):
+        st.session_state.page="analysis"
 
-    with c1:
-        st.markdown("### ⚡ Electrostatics")
-
-    with c2:
-        st.markdown("### 🧬 Pi stacking")
-
-    with c3:
-        st.markdown("### 📐 Shape fitting")
-
-    with c4:
-        st.markdown("### 💊 Drug likeness")
-
-    st.button("Start Analysis",on_click=lambda:st.session_state.update(page="analysis"))
+    st.stop()
 
 
 # -----------------------------
-# ANALYSIS PAGE
+# HELPER FUNCTIONS
 # -----------------------------
-
-if st.session_state.page=="analysis":
-
-    col1,col2=st.columns([4,1])
-
-    with col1:
-        st.title("Analysis Workspace")
-
-    with col2:
-        st.button("Back",on_click=lambda:st.session_state.update(page="home"))
-
-
-# -----------------------------
-# FUNCTIONS
-# -----------------------------
-
 def is_rna(res):
     return res.get_resname().strip() in RNA_NAMES
 
@@ -103,34 +82,33 @@ def get_unique_ligands(structure):
 def extract_binding_pocket(structure,ligand_id,cutoff=6):
 
     parts=ligand_id.split()
-    chain,resnum=parts[1].split(":")
+
+    chain_id,res_seq=parts[1].split(":")
 
     ligand_atoms=[]
     rna_atoms=[]
 
     for model in structure:
-        for chain_obj in model:
-            for res in chain_obj:
+        for chain in model:
+            for res in chain:
 
-                if chain_obj.id==chain and res.id[1]==int(resnum):
-
+                if chain.id==chain_id and res.id[1]==int(res_seq):
                     ligand_atoms.extend(list(res.get_atoms()))
 
                 elif is_rna(res):
-
                     rna_atoms.extend(list(res.get_atoms()))
 
     ns=NeighborSearch(rna_atoms)
 
-    pocket_atoms=set()
+    pocket=set()
 
     for atom in ligand_atoms:
 
         neighbors=ns.search(atom.coord,cutoff)
 
-        pocket_atoms.update(neighbors)
+        pocket.update(neighbors)
 
-    return list(pocket_atoms)
+    return list(pocket)
 
 
 def calculate_pocket_features(atoms):
@@ -143,80 +121,64 @@ def calculate_pocket_features(atoms):
 
     phosphate=[]
     polar=[]
-    residues=set()
 
     for a in atoms:
 
         name=a.get_name().strip()
-        element=a.element
 
-        if element=="O" and ("OP" in name or "O1P" in name or "O2P" in name):
+        if a.element=="O" and ("OP" in name or "O1P" in name or "O2P" in name):
             phosphate.append(a)
 
-        if element in ["O","N"]:
+        if a.element in ["O","N"]:
             polar.append(a)
-            residues.add(a.get_parent().get_resname())
 
-    return{
-
+    return {
         "Pocket_Rg":rg,
         "Center":center.tolist(),
         "Phosphate":phosphate,
-        "Polar":polar,
-        "Residues":list(residues)
+        "Polar":polar
     }
 
 
-def main_viewer(pdb_path):
+# -----------------------------
+# MAIN RNA VIEWER
+# -----------------------------
+def visualize_main(pdb_path,show_phosphate=False,show_polar=False,features=None):
 
     with open(pdb_path) as f:
-        pdb=f.read()
+        pdb_data=f.read()
 
     view=py3Dmol.view(width=700,height=500)
 
-    view.addModel(pdb,"pdb")
+    view.addModel(pdb_data,"pdb")
 
-    view.setStyle({"cartoon":{"color":"spectrum"}})
+    view.setStyle({"cartoon":{"color":"lightblue"}})
 
     view.addSurface(py3Dmol.VDW,{"opacity":0.3,"color":"white"})
 
-    view.setStyle({"hetflag":True},{"stick":{"colorscheme":"greenCarbon"}})
+    if show_phosphate and features:
 
-    view.zoomTo()
+        for a in features["Phosphate"]:
 
-    return view
+            coord=a.coord
 
+            view.addSphere({
+                "center":{"x":float(coord[0]),"y":float(coord[1]),"z":float(coord[2])},
+                "radius":0.6,
+                "color":"red"
+            })
 
-def pocket_viewer(pdb_path,phos=None,polar=None):
+    if show_polar and features:
 
-    with open(pdb_path) as f:
-        pdb=f.read()
+        for a in features["Polar"]:
 
-    view=py3Dmol.view(width=350,height=350)
+            coord=a.coord
 
-    view.addModel(pdb,"pdb")
-
-    view.setStyle({"cartoon":{"color":"lightgrey"}})
-
-    if phos:
-
-        for a in phos:
-
-            c=a.coord
-
-            view.addSphere({"center":{"x":float(c[0]),"y":float(c[1]),"z":float(c[2])},
-                            "radius":0.6,
-                            "color":"red"})
-
-    if polar:
-
-        for a in polar:
-
-            c=a.coord
-
-            view.addSphere({"center":{"x":float(c[0]),"y":float(c[1]),"z":float(c[2])},
-                            "radius":0.6,
-                            "color":"blue"})
+            view.addSphere({
+                "center":{"x":float(coord[0]),"y":float(coord[1]),"z":float(coord[2])},
+                "radius":0.5,
+                "color":"blue"
+            })
 
     view.zoomTo()
 
@@ -226,59 +188,143 @@ def pocket_viewer(pdb_path,phos=None,polar=None):
 # -----------------------------
 # SIDEBAR
 # -----------------------------
+st.sidebar.header("Upload RNA Structure")
 
 pdb_file=st.sidebar.file_uploader("Upload PDB",type="pdb")
 
+
 if pdb_file:
 
-    with open("temp.pdb","wb") as f:
+    with open("temp_struct.pdb","wb") as f:
         f.write(pdb_file.getbuffer())
 
     parser=PDBParser(QUIET=True)
 
-    struct=parser.get_structure("RNA","temp.pdb")
+    struct=parser.get_structure("RNA","temp_struct.pdb")
 
     ligands=get_unique_ligands(struct)
 
-    selected=st.sidebar.selectbox("Target Ligand",ligands)
+    if ligands:
 
-    atoms=extract_binding_pocket(struct,selected)
+        selected=st.sidebar.selectbox("Reference ligand",ligands)
 
-    st.session_state.pocket_features=calculate_pocket_features(atoms)
+        pocket_atoms=extract_binding_pocket(struct,selected)
+
+        st.session_state.pocket_features=calculate_pocket_features(pocket_atoms)
 
 
 # -----------------------------
-# MAIN LAYOUT
+# MAIN DISPLAY
 # -----------------------------
-
 if pdb_file:
 
-    left,center,right=st.columns([1,2,1])
+    left,right=st.columns([3,1])
 
-    with center:
+    with left:
 
-        st.subheader("3D Pocket View")
+        st.subheader("RNA–Ligand Structure")
 
-        showmol(main_viewer("temp.pdb"),height=500,width=700)
+        show_phosphate=st.checkbox("Show Phosphate Atoms")
+
+        show_polar=st.checkbox("Show Polar Atoms")
+
+        view=visualize_main(
+            "temp_struct.pdb",
+            show_phosphate,
+            show_polar,
+            st.session_state.pocket_features
+        )
+
+        showmol(view,height=500,width=700)
+
 
     with right:
 
-        st.subheader("Pocket Interaction Viewer")
+        st.subheader("Pocket Physics")
 
-        show_phos=st.checkbox("Show Phosphate Sites")
-        show_polar=st.checkbox("Show Polar Atoms")
+        pf=st.session_state.pocket_features
 
-        phos=None
-        polar=None
+        st.metric("Pocket Radius (Rg)",f"{pf['Pocket_Rg']:.2f} Å")
 
-        if show_phos:
-            phos=st.session_state.pocket_features["Phosphate"]
+        st.metric("Phosphate Sites",len(pf["Phosphate"]))
 
-        if show_polar:
-            polar=st.session_state.pocket_features["Polar"]
+        st.metric("Polar Atoms",len(pf["Polar"]))
 
-        showmol(pocket_viewer("temp.pdb",phos,polar),height=350,width=350)
 
-        st.markdown("**Interacting Residues:**")
+# -----------------------------
+# VIRTUAL SCREENING
+# -----------------------------
+st.markdown("---")
 
-        st.write(st.session_state.pocket_features["Residues"])
+st.subheader("Virtual Screening")
+
+smiles_input=st.text_area(
+    "Enter SMILES library (one per line)",
+    "c1ccccc1\nCC(=O)Oc1ccccc1C(=O)O",
+    height=150
+)
+
+if st.button("Run Screening"):
+
+    results=[]
+
+    lines=[l.strip() for l in smiles_input.splitlines() if l.strip()]
+
+    progress=st.progress(0)
+
+    for i,smi in enumerate(lines):
+
+        mol=Chem.MolFromSmiles(smi)
+
+        if mol:
+
+            mw=Descriptors.MolWt(mol)
+
+            logp=Descriptors.MolLogP(mol)
+
+            qed_val=QED.qed(mol)
+
+            mol_rg=rdMolDescriptors.CalcRadiusOfGyration(mol)
+
+            pocket_rg=st.session_state.pocket_features["Pocket_Rg"]
+
+            shape_score=1-(abs(mol_rg-pocket_rg)/(pocket_rg+0.1))
+
+            prob=max(0.01,min(0.99,shape_score*qed_val))
+
+            results.append({
+                "Ligand":f"Mol_{i+1}",
+                "SMILES":smi,
+                "Prob_Score":round(prob,3),
+                "MW":round(mw,2),
+                "LogP":round(logp,2),
+                "QED":round(qed_val,2)
+            })
+
+        progress.progress((i+1)/len(lines))
+
+    if results:
+
+        df=pd.DataFrame(results).sort_values("Prob_Score",ascending=False)
+
+        c1,c2=st.columns([2,1])
+
+        with c1:
+            st.dataframe(df,use_container_width=True)
+
+        with c2:
+
+            chart=alt.Chart(df).mark_bar().encode(
+                x="Prob_Score",
+                y=alt.Y("Ligand",sort="-x"),
+                color="Prob_Score"
+            )
+
+            st.altair_chart(chart,use_container_width=True)
+
+        st.download_button(
+            "Download CSV",
+            df.to_csv(index=False),
+            "results.csv",
+            "text/csv"
+        )
