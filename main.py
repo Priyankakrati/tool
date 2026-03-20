@@ -422,7 +422,7 @@ The tool automatically:
     with c3:
         st.markdown("""
         <div class="feature-card">
-        <div class="feature-icon">📐</div>
+        <div class="feature-icon"></div>
         <div class="feature-title">Shape Complementarity</div>
         <div class="feature-text">
         Ligand geometry is compared with RNA pocket geometry using 
@@ -449,7 +449,7 @@ The tool automatically:
 
     c_btn = st.columns([1,2,1])
     with c_btn[1]:
-        st.button("Start Analysis 🚀", on_click=go_analysis, use_container_width=True)
+        st.button("Start Analysis", on_click=go_analysis, use_container_width=True)
 
 # --- ANALYSIS PAGE ---
 elif st.session_state.page == "analysis":
