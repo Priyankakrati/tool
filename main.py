@@ -383,9 +383,9 @@ biophysical interaction principles derived from RNA–ligand structural data.
 
 The tool automatically:
 
-• identifies the RNA binding pocket  
-• extracts pocket physicochemical features  
-• evaluates ligand compatibility using physics-informed scoring
+• Identifies the RNA binding pocket  
+• Extracts pocket physicochemical features  
+• Evaluates ligand compatibility using physics-informed scoring
 """)
 
     st.write("")
