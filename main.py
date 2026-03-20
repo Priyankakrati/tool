@@ -396,7 +396,7 @@ The tool automatically:
     with c1:
         st.markdown("""
         <div class="feature-card">
-        <div class="feature-icon">⚡</div>
+        <div class="feature-icon"></div>
         <div class="feature-title">Electrostatics</div>
         <div class="feature-text">
         RNA backbones contain negatively charged phosphate groups. 
@@ -409,7 +409,7 @@ The tool automatically:
     with c2:
         st.markdown("""
         <div class="feature-card">
-        <div class="feature-icon">🥞</div>
+        <div class="feature-icon"></div>
         <div class="feature-title">π-Stacking</div>
         <div class="feature-text">
         Aromatic ligands often interact with RNA bases through 
@@ -435,7 +435,7 @@ The tool automatically:
     with c4:
         st.markdown("""
         <div class="feature-card">
-        <div class="feature-icon">💊</div>
+        <div class="feature-icon"></div>
         <div class="feature-title">Drug-Likeness</div>
         <div class="feature-text">
         RNALigVS integrates drug-likeness metrics such as 
