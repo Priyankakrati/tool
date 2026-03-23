@@ -120,7 +120,7 @@ def calculate_pocket_features(pocket_atoms):
     polar_atoms = [a for a in pocket_atoms if a.element in ['O', 'N']]
 
     return {
-        "Pocket_Rg": rg,
+        "Pocket_Radius": radius,
         "Pocket_Curvature": curvature,
         "Neg_Oxygens": neg_oxygens,
         "Polar_Atoms": polar_atoms,
@@ -169,7 +169,7 @@ def get_ligand_features(mol):
         "Mol": mol, "Charges": charges, 
         "MW": mw, "LogP": logp, "TPSA": tpsa,
         "HBD": hbd, "HBA": hba, "AromaticRings": aromatic, "RotBonds": rotb,
-        "Rg": rg, "QED": qed_val, "MR": mr, "Lipinski_Violations": violations,
+        "radius": radius, "QED": qed_val, "MR": mr, "Lipinski_Violations": violations,
         "Charge_Pos_Sum": q_pos_sum, "Charge_Neg_Sum": q_neg_sum
     }
 
@@ -344,7 +344,7 @@ Measures spatial spread of pocket atoms. Small Rg → compact pocket.
 ### Curvature Score
 Calculated from eigenvalues: Curvature = λmin / λmax. High value → curved pocket.
 
-### Phosphate & Polar Sites
+### Backbone oxygens & Polar Sites
 Negatively charged backbone oxygens and O/N atoms enable electrostatic and H-bond interactions.
 """)
 
