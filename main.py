@@ -120,7 +120,7 @@ def calculate_pocket_features(pocket_atoms):
     polar_atoms = [a for a in pocket_atoms if a.element in ['O', 'N']]
 
     return {
-        "Pocket_Radius": radius,
+        "Pocket_Rg": rg,
         "Pocket_Curvature": curvature,
         "Neg_Oxygens": neg_oxygens,
         "Polar_Atoms": polar_atoms,
@@ -169,7 +169,7 @@ def get_ligand_features(mol):
         "Mol": mol, "Charges": charges, 
         "MW": mw, "LogP": logp, "TPSA": tpsa,
         "HBD": hbd, "HBA": hba, "AromaticRings": aromatic, "RotBonds": rotb,
-        "radius": radius, "QED": qed_val, "MR": mr, "Lipinski_Violations": violations,
+        "Rg": rg, "QED": qed_val, "MR": mr, "Lipinski_Violations": violations,
         "Charge_Pos_Sum": q_pos_sum, "Charge_Neg_Sum": q_neg_sum
     }
 
@@ -344,7 +344,7 @@ Measures spatial spread of pocket atoms. Small Rg → compact pocket.
 ### Curvature Score
 Calculated from eigenvalues: Curvature = λmin / λmax. High value → curved pocket.
 
-### Backbone oxygens & Polar Sites
+### Phosphate & Polar Sites
 Negatively charged backbone oxygens and O/N atoms enable electrostatic and H-bond interactions.
 """)
 
@@ -383,9 +383,9 @@ biophysical interaction principles derived from RNA–ligand structural data.
 
 The tool automatically:
 
-• Identifies the RNA binding pocket  
-• Extracts pocket physicochemical features  
-• Evaluates ligand compatibility using physics-informed scoring
+• identifies the RNA binding pocket  
+• extracts pocket physicochemical features  
+• evaluates ligand compatibility using physics-informed scoring
 """)
 
     st.write("")
@@ -396,7 +396,7 @@ The tool automatically:
     with c1:
         st.markdown("""
         <div class="feature-card">
-        <div class="feature-icon"></div>
+        <div class="feature-icon">⚡</div>
         <div class="feature-title">Electrostatics</div>
         <div class="feature-text">
         RNA backbones contain negatively charged phosphate groups. 
@@ -409,7 +409,7 @@ The tool automatically:
     with c2:
         st.markdown("""
         <div class="feature-card">
-        <div class="feature-icon"></div>
+        <div class="feature-icon">🥞</div>
         <div class="feature-title">π-Stacking</div>
         <div class="feature-text">
         Aromatic ligands often interact with RNA bases through 
@@ -422,7 +422,7 @@ The tool automatically:
     with c3:
         st.markdown("""
         <div class="feature-card">
-        <div class="feature-icon"></div>
+        <div class="feature-icon">📐</div>
         <div class="feature-title">Shape Complementarity</div>
         <div class="feature-text">
         Ligand geometry is compared with RNA pocket geometry using 
@@ -435,7 +435,7 @@ The tool automatically:
     with c4:
         st.markdown("""
         <div class="feature-card">
-        <div class="feature-icon"></div>
+        <div class="feature-icon">💊</div>
         <div class="feature-title">Drug-Likeness</div>
         <div class="feature-text">
         RNALigVS integrates drug-likeness metrics such as 
@@ -449,7 +449,7 @@ The tool automatically:
 
     c_btn = st.columns([1,2,1])
     with c_btn[1]:
-        st.button("Start Analysis", on_click=go_analysis, use_container_width=True)
+        st.button("Start Analysis 🚀", on_click=go_analysis, use_container_width=True)
 
 # --- ANALYSIS PAGE ---
 elif st.session_state.page == "analysis":
@@ -652,4 +652,3 @@ elif st.session_state.page == "analysis":
                         m3, m4 = st.columns(2)
                         m3.metric("Molar Refractivity", f"{row.get('MR', 0):.2f}")
                         m4.metric("Aromatic Rings", f"{row.get('AromaticRings', 0)}")
-                        
