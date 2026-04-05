@@ -10,3 +10,4 @@ matplotlib
 MDAnalysis
 scikit-learn
 freesasa
+plotly
