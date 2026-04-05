@@ -28,20 +28,20 @@ RNA_RES = {"A","C","G","U"}
 IGNORE = {"HOH","WAT"}
 
 # =========================
-# GET LIGAND FROM PDB
+# STRUCTURE FUNCTIONS
 # =========================
+def is_rna(res):
+    return res.get_resname().strip() in RNA_RES
+
 def get_ligands(structure):
     ligands = []
     for model in structure:
         for chain in model:
             for res in chain:
-                if res.get_resname() not in RNA_RES and res.get_resname() not in IGNORE and not is_aa(res):
+                if not is_rna(res) and res.get_resname() not in IGNORE and not is_aa(res):
                     ligands.append(res)
     return ligands
 
-# =========================
-# EXTRACT POCKET
-# =========================
 def extract_pocket(structure, ligand):
 
     ligand_atoms = list(ligand.get_atoms())
@@ -50,21 +50,27 @@ def extract_pocket(structure, ligand):
     for model in structure:
         for chain in model:
             for res in chain:
-                if res.get_resname() in RNA_RES:
+                if is_rna(res):
                     rna_atoms.extend(list(res.get_atoms()))
 
     ns = NeighborSearch(rna_atoms)
 
-    pocket_atoms = set()
-    for atom in ligand_atoms:
-        pocket_atoms.update(ns.search(atom.coord, 6.0))
+    pocket_atoms = []
+    for ra in rna_atoms:
+        for la in ligand_atoms:
+            if np.linalg.norm(ra.coord - la.coord) < 8:
+                pocket_atoms.append(ra)
+                break
 
-    return list(pocket_atoms)
+    if len(pocket_atoms) < 10:
+        pocket_atoms = rna_atoms[:200]
+
+    return pocket_atoms
 
 # =========================
-# 🔥 ALIGN LIGAND INTO POCKET
+# FEATURE EXTRACTION (EXACT TRAINING LOGIC)
 # =========================
-def prepare_ligand(mol, pocket_atoms):
+def compute_features_smiles(pocket_atoms, mol):
 
     mol = Chem.AddHs(mol)
     AllChem.EmbedMolecule(mol, randomSeed=42)
@@ -72,14 +78,14 @@ def prepare_ligand(mol, pocket_atoms):
 
     conf = mol.GetConformer()
 
-    lig_coords = np.array([
+    ligand_coords = np.array([
         np.array(conf.GetAtomPosition(i))
         for i in range(mol.GetNumAtoms())
     ])
-    lig_center = lig_coords.mean(axis=0)
 
-    pocket_coords = np.array([a.coord for a in pocket_atoms])
-    pocket_center = pocket_coords.mean(axis=0)
+    # ALIGN LIGAND INTO POCKET
+    lig_center = ligand_coords.mean(axis=0)
+    pocket_center = np.mean([a.coord for a in pocket_atoms], axis=0)
 
     shift = pocket_center - lig_center
 
@@ -87,26 +93,19 @@ def prepare_ligand(mol, pocket_atoms):
         pos = conf.GetAtomPosition(i)
         conf.SetAtomPosition(i, pos + shift)
 
-    return mol
-
-# =========================
-# FEATURE EXTRACTION (TRAINING CONSISTENT)
-# =========================
-def compute_features(pocket_atoms, mol):
-
-    mol = prepare_ligand(mol, pocket_atoms)
-    conf = mol.GetConformer()
-
     ligand_coords = np.array([
         np.array(conf.GetAtomPosition(i))
         for i in range(mol.GetNumAtoms())
     ])
 
-    contact = 0
+    # =========================
+    # EXACT FEATURE CALCULATION
+    # =========================
     elec = 0
     hbond = 0
-    hb_count = 0
     vdw = 0
+    contact = 0
+    hb_count = 0
 
     for lc in ligand_coords:
         for pa in pocket_atoms:
@@ -116,15 +115,19 @@ def compute_features(pocket_atoms, mol):
             if d > 8:
                 continue
 
+            # Electrostatic
             elec += 1/(d**2 + 1)
 
-            if d < 3.5:
+            # Hbond
+            if pa.element in ["N","O"] and d < 3.5:
                 hbond += 1/(d**2 + 0.5)
                 hb_count += 1
 
+            # vdW
             if d < 6:
                 vdw += 1/(d**6 + 1)
 
+            # Contact
             if d < 5:
                 contact += 1
 
@@ -140,6 +143,7 @@ def compute_features(pocket_atoms, mol):
 
     pocket_coords = np.array([a.coord for a in pocket_atoms])
     center = pocket_coords.mean(axis=0)
+
     dists = np.linalg.norm(pocket_coords - center, axis=1)
 
     depth_mean = np.mean(dists)
@@ -155,7 +159,7 @@ def compute_features(pocket_atoms, mol):
     }
 
 # =========================
-# FINAL PREDICTION (MATCH TRAINING)
+# FINAL MODEL (EXACT TRAINING EQUATION)
 # =========================
 def predict(feat):
 
@@ -169,6 +173,7 @@ def predict(feat):
     )
 
     z = (score - MEAN) / (STD + 1e-6)
+
     prob = 1 / (1 + np.exp(-z))
 
     return prob
@@ -183,14 +188,10 @@ def visualize(pdb_path, ligand):
 
     view = py3Dmol.view(width=800, height=500)
     view.addModel(pdb_data, "pdb")
-
     view.setStyle({"cartoon": {"color": "spectrum"}})
 
-    resi = ligand.id[1]
-    chain = ligand.get_parent().id
-
     view.addStyle(
-        {"chain": chain, "resi": resi},
+        {"chain": ligand.get_parent().id, "resi": ligand.id[1]},
         {"stick": {"colorscheme": "greenCarbon"}}
     )
 
@@ -198,9 +199,9 @@ def visualize(pdb_path, ligand):
     return view
 
 # =========================
-# UI (SAME STYLE)
+# UI (UNCHANGED STYLE)
 # =========================
-st.title("RNALigVS")
+st.title("Analysis Workspace")
 
 pdb_file = st.file_uploader("Upload PDB", type="pdb")
 
@@ -222,26 +223,38 @@ if pdb_file:
 
     pocket_atoms = extract_pocket(structure, ligand)
 
-    view = visualize("temp.pdb", ligand)
-    showmol(view, height=500)
+    col1, col2 = st.columns([2,1])
 
-    st.success(f"Pocket extracted: {len(pocket_atoms)} atoms")
+    with col1:
+        st.subheader("3D Pocket View")
+        showmol(visualize("temp.pdb", ligand), height=500)
 
-    smiles_text = st.text_area("Enter SMILES (one per line)")
+    with col2:
+        st.subheader("Pocket Physics")
 
-    if st.button("Run"):
+        coords = np.array([a.coord for a in pocket_atoms])
+        rg = np.sqrt(np.mean(np.sum((coords - coords.mean(axis=0))**2, axis=1)))
 
-        smiles_list = [s.strip() for s in smiles_text.split("\n") if s.strip()]
+        st.metric("Pocket Radius (Rg)", f"{rg:.2f} Å")
+        st.metric("Atoms", len(pocket_atoms))
+
+    st.markdown("---")
+
+    st.subheader("Virtual Screening")
+
+    smiles = st.text_area("Enter SMILES (one per line)")
+
+    if st.button("Run Screening"):
 
         results = []
 
-        for i, smi in enumerate(smiles_list):
+        for i, smi in enumerate(smiles.splitlines()):
 
-            mol = Chem.MolFromSmiles(smi)
+            mol = Chem.MolFromSmiles(smi.strip())
             if mol is None:
                 continue
 
-            feats = compute_features(pocket_atoms, mol)
+            feats = compute_features_smiles(pocket_atoms, mol)
             prob = predict(feats)
 
             row = feats.copy()
@@ -253,7 +266,6 @@ if pdb_file:
 
         df = pd.DataFrame(results).sort_values("Probability_model", ascending=False)
 
-        st.subheader("🏆 Top Candidates")
         st.dataframe(df, use_container_width=True)
 
         st.download_button(
@@ -262,7 +274,6 @@ if pdb_file:
             "results.csv"
         )
 
-        # Inspector
         sel = st.selectbox("Inspect Ligand", df["Ligand"])
 
         row = df[df["Ligand"] == sel].iloc[0]
