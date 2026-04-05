@@ -75,7 +75,7 @@ def calculate_pocket_metrics(pocket_atoms):
     return {"Rg": rg, "Depth": depth_mean, "Curve": curvature, "Atoms": pocket_atoms, "Center": center}
 
 def predict_binding(smi: str, p_metrics: Dict):
-    """Final Prediction Pipeline"""
+    """Final Prediction Pipeline using model_params.json logic"""
     mol = Chem.MolFromSmiles(smi)
     if not mol: return None
     mol = Chem.AddHs(mol)
@@ -106,7 +106,7 @@ def predict_binding(smi: str, p_metrics: Dict):
             if l_el in ["C","N"] and get_element(pa) in ["C","N"] and 3.0 < d < 4.5:
                 pi_stack += 1 / (d**2)
 
-    # Weights from model_params.json
+    # Weights from testing json file (model_params.json)
     c_safe = max(contact, 1)
     raw_score = (
         0.35 * (contact / max(len(l_atoms), 1)) + # Contact Density
@@ -126,7 +126,7 @@ def predict_binding(smi: str, p_metrics: Dict):
 # MAIN INTERFACE
 # ==================================================
 
-st.title("🧬 RNALigVS: Optimized Screening")
+st.title("🧬 RNALigVS: AI Virtual Screening")
 st.caption("Integrated Physics Engine for India-specific Health Research Priorities")
 
 with st.sidebar:
