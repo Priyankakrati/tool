@@ -1,0 +1,12 @@
+{
+  "mean": 16.62,
+  "std": 35.71,
+  "weights": {
+    "Contact_density": 0.35,
+    "Electrostatic_score": 0.30,
+    "Hbond_strength": 0.10,
+    "Pi_stacking": 0.10,
+    "Pocket_depth_mean": 0.10,
+    "Curvature": 0.05
+  }
+}
