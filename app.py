@@ -1,329 +1,202 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import json
+import os
 import warnings
-import requests
-from io import BytesIO
-from PIL import Image
+import altair as alt
+from typing import List, Dict
 
 from rdkit import Chem
-from rdkit.Chem import AllChem, Draw
-
-from Bio.PDB import PDBParser
+from rdkit.Chem import AllChem, Descriptors, rdMolDescriptors, QED, rdPartialCharges
+from Bio.PDB import PDBList, PDBParser, NeighborSearch
 from Bio.PDB.Polypeptide import is_aa
-
 import py3Dmol
 from stmol import showmol
-import plotly.express as px
 
+# Suppress Warnings
 warnings.filterwarnings("ignore")
 
-# =========================
-# CONFIG
-# =========================
-st.set_page_config(page_title="RNALigVS", layout="wide")
+# ==================================================
+# UI THEME & CUSTOM STYLING
+# ==================================================
+st.set_page_config(page_title="RNALigVS | AI Virtual Screening", layout="wide", page_icon="🧬")
 
-# =========================
-# LOGO
-# =========================
-logo_url = "https://raw.githubusercontent.com/YOUR_REPO/main/logo.png"
-
-try:
-    response = requests.get(logo_url)
-    logo = Image.open(BytesIO(response.content))
-except:
-    logo = None
-
-col1, col2 = st.columns([1,6])
-with col1:
-    if logo:
-        st.image(logo, width=80)
-
-with col2:
-    st.markdown("""
-    <h1 style='margin-bottom:0;'>RNALigVS</h1>
-    <p style='margin-top:0;'>RNA–Ligand Virtual Screening Platform</p>
+st.markdown("""
+    <style>
+    .main { background-color: #f9fafb; }
+    .stMetric { 
+        background-color: #ffffff; 
+        padding: 20px; 
+        border-radius: 12px; 
+        box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+        border-top: 4px solid #2563eb;
+    }
+    h1 { color: #1e3a8a; font-family: 'Inter', sans-serif; font-weight: 800; }
+    .stButton>button {
+        width: 100%; border-radius: 8px; height: 3.5em;
+        background-color: #2563eb; color: white; font-weight: 600;
+        transition: all 0.2s; border: none;
+    }
+    .stButton>button:hover { background-color: #1d4ed8; transform: translateY(-1px); }
+    </style>
     """, unsafe_allow_html=True)
 
-st.markdown("---")
+# Constants based on RNALig/NucLigs standards
+RNA_RES = {"A", "C", "G", "U", "I", "PSU", "5MC", "7MG"}
+IGNORE_RES = {"HOH", "WAT", "NA", "K", "MG", "CA", "ZN", "FE", "MN"}
 
-# =========================
-# LOAD MODEL
-# =========================
-with open("model_params.json") as f:
-    params = json.load(f)
+# ==================================================
+# CORE PHYSICS ENGINE (Optimized Parameters)
+# ==================================================
 
-MEAN = params["mean"]
-STD = params["std"]
+def get_element(atom):
+    try:
+        el = atom.element.strip().upper()
+        return el if el else atom.get_name()[0].upper()
+    except: return atom.get_name()[0].upper()
 
-RNA_RES = {"A","C","G","U"}
-IGNORE = {"HOH","WAT"}
+def calculate_pocket_metrics(pocket_atoms):
+    """Computes geometry for the binding site"""
+    if not pocket_atoms: return None
+    coords = np.array([a.coord for a in pocket_atoms])
+    center = coords.mean(axis=0)
+    
+    # Radius of Gyration
+    rg = np.sqrt(np.mean(np.sum((coords - center)**2, axis=1)))
+    
+    # Surface Curvature
+    cov = np.cov(coords.T)
+    eig = sorted(np.real(np.linalg.eigvals(cov)))
+    curvature = eig[0] / eig[-1] if eig[-1] != 0 else 0
+    
+    # Pocket Depth Mean
+    depth_mean = np.mean(np.linalg.norm(coords - center, axis=1))
 
-# =========================
-# STRUCTURE FUNCTIONS
-# =========================
-def is_rna(res):
-    return res.get_resname().strip() in RNA_RES
+    return {"Rg": rg, "Depth": depth_mean, "Curve": curvature, "Atoms": pocket_atoms, "Center": center}
 
-def get_ligands(structure):
-    ligands = []
-    for model in structure:
-        for chain in model:
-            for res in chain:
-                if not is_rna(res) and res.get_resname() not in IGNORE and not is_aa(res):
-                    ligands.append(res)
-    return ligands
-
-def extract_pocket(structure, ligand):
-    ligand_atoms = list(ligand.get_atoms())
-    rna_atoms = []
-
-    for model in structure:
-        for chain in model:
-            for res in chain:
-                if is_rna(res):
-                    rna_atoms.extend(list(res.get_atoms()))
-
-    pocket_atoms = []
-    for ra in rna_atoms:
-        for la in ligand_atoms:
-            if np.linalg.norm(ra.coord - la.coord) < 8:
-                pocket_atoms.append(ra)
-                break
-
-    return pocket_atoms if len(pocket_atoms) > 10 else rna_atoms[:200]
-
-# =========================
-# FEATURE EXTRACTION
-# =========================
-def compute_features(pocket_atoms, mol):
-
+def predict_binding(smi: str, p_metrics: Dict):
+    """Final Prediction Pipeline"""
+    mol = Chem.MolFromSmiles(smi)
+    if not mol: return None
     mol = Chem.AddHs(mol)
-
-    if mol.GetNumConformers() == 0:
-        AllChem.EmbedMolecule(mol, randomSeed=42)
-        AllChem.UFFOptimizeMolecule(mol)
-
+    if AllChem.EmbedMolecule(mol, randomSeed=42) != 0: return None
+    
+    # Alignment: Translate ligand centroid to pocket center
     conf = mol.GetConformer()
-
-    coords = np.array([
-        np.array(conf.GetAtomPosition(i))
-        for i in range(mol.GetNumAtoms())
-    ])
-
-    # ALIGN
-    shift = np.mean([a.coord for a in pocket_atoms], axis=0) - coords.mean(axis=0)
+    l_coords = conf.GetPositions()
+    offset = p_metrics["Center"] - l_coords.mean(axis=0)
     for i in range(mol.GetNumAtoms()):
-        pos = conf.GetAtomPosition(i)
-        conf.SetAtomPosition(i, pos + shift)
+        conf.SetAtomPosition(i, l_coords[i] + offset)
+    
+    elec, hbond, hb_cnt, contact, pi_stack = 0, 0, 0, 0, 0
+    l_atoms = list(mol.GetAtoms())
 
-    coords = np.array([
-        np.array(conf.GetAtomPosition(i))
-        for i in range(mol.GetNumAtoms())
-    ])
+    for i, la in enumerate(l_atoms):
+        l_el, l_pos = la.GetSymbol().upper(), conf.GetAtomPosition(i)
+        for pa in p_metrics["Atoms"]:
+            d = np.linalg.norm(l_pos - pa.coord)
+            if d > 8: continue
+            
+            # Feature extraction logic from features_rnaligvs_final.py
+            elec += 1 / (d**2 + 1)
+            if d < 5: contact += 1
+            if l_el in ["N","O"] and get_element(pa) in ["N","O"] and d < 3.5:
+                hbond += 1 / (d**2 + 0.5)
+                hb_cnt += 1
+            if l_el in ["C","N"] and get_element(pa) in ["C","N"] and 3.0 < d < 4.5:
+                pi_stack += 1 / (d**2)
 
-    elec = hbond = contact = hb_count = 0
-
-    for lc in coords:
-        for pa in pocket_atoms:
-            d = np.linalg.norm(lc - pa.coord)
-
-            if d > 8:
-                continue
-
-            elec += 1/(d**2 + 1)
-
-            if pa.element in ["O","N"] and d < 3.5:
-                hbond += 1/(d**2 + 0.5)
-                hb_count += 1
-
-            if d < 5:
-                contact += 1
-
-    contact_density = contact / len(coords)
-    electrostatic = elec / max(contact,1)
-    hbond_strength = hbond / hb_count if hb_count else 0
-    pi = Chem.rdMolDescriptors.CalcNumAromaticRings(mol) / max(contact,1)
-
-    pocket_coords = np.array([a.coord for a in pocket_atoms])
-    center = pocket_coords.mean(axis=0)
-    dists = np.linalg.norm(pocket_coords - center, axis=1)
-
-    depth = np.mean(dists)
-    curvature = np.var(dists)/(np.mean(dists)+1e-6)
-
-    return {
-        "Contact_density": contact_density,
-        "Electrostatic_score": electrostatic,
-        "Hbond_strength": hbond_strength,
-        "Pi_stacking": pi,
-        "Pocket_depth_mean": depth,
-        "Curvature": curvature,
-        "coords": coords,
-        "mol": mol
-    }
-
-# =========================
-# PREDICTION
-# =========================
-def predict(feat):
-
-    score = (
-        0.35*feat["Contact_density"] +
-        0.30*feat["Electrostatic_score"] +
-        0.10*feat["Hbond_strength"] +
-        0.10*feat["Pi_stacking"] +
-        0.10*feat["Pocket_depth_mean"] +
-        0.05*feat["Curvature"]
+    # Weights from model_params.json
+    c_safe = max(contact, 1)
+    raw_score = (
+        0.35 * (contact / max(len(l_atoms), 1)) + # Contact Density
+        0.30 * (elec / c_safe) +                  # Electrostatic Score
+        0.10 * (hbond / max(hb_cnt, 1)) +         # Hbond Strength
+        0.10 * (pi_stack / c_safe) +              # Pi Stacking
+        0.10 * p_metrics["Depth"] +               # Pocket Depth Mean
+        0.05 * p_metrics["Curve"]                 # Curvature
     )
+    
+    # Normalization (Mean: 16.62, STD: 35.71)
+    z = (raw_score - 16.62) / 35.71
+    prob = 1 / (1 + np.exp(-z)) # Sigmoid transformation
+    return round(float(prob), 4)
 
-    z = (score - MEAN) / (STD + 1e-6)
-    return 1/(1+np.exp(-z))
+# ==================================================
+# MAIN INTERFACE
+# ==================================================
 
-# =========================
-# INTERACTIONS
-# =========================
-def add_interactions(view, coords, pocket_atoms):
-    for lc in coords:
-        for pa in pocket_atoms:
-            d = np.linalg.norm(lc - pa.coord)
+st.title("🧬 RNALigVS: Optimized Screening")
+st.caption("Integrated Physics Engine for India-specific Health Research Priorities")
 
-            if pa.element in ["O","N"] and d < 3.5:
-                view.addLine({"start": {"x":lc[0],"y":lc[1],"z":lc[2]},
-                              "end": {"x":pa.coord[0],"y":pa.coord[1],"z":pa.coord[2]},
-                              "color":"blue","dashed":True})
-            elif d < 5:
-                view.addLine({"start": {"x":lc[0],"y":lc[1],"z":lc[2]},
-                              "end": {"x":pa.coord[0],"y":pa.coord[1],"z":pa.coord[2]},
-                              "color":"orange"})
+with st.sidebar:
+    st.header("Step 1: Target Setup")
+    pdb_id = st.text_input("Enter PDB ID", "4GXY").upper()
+    if st.button("Fetch Structure"):
+        pdbl = PDBList()
+        fname = pdbl.retrieve_pdb_file(pdb_id, pdir=".", file_format="pdb", overwrite=True)
+        if fname and os.path.exists(fname):
+            st.session_state.path = f"{pdb_id}.pdb"
+            os.rename(fname, st.session_state.path)
+            st.session_state.struct = PDBParser(QUIET=True).get_structure(pdb_id, st.session_state.path)
+            st.success(f"Loaded {pdb_id}")
 
-# =========================
-# VISUALIZATION
-# =========================
-def visualize(pdb_path, ligand, feat=None, pocket_atoms=None):
+if "struct" in st.session_state:
+    # Identify Binding Sites
+    ligands = []
+    for res in st.session_state.struct.get_residues():
+        res_name = res.get_resname().strip()
+        if res_name not in RNA_RES and res_name not in IGNORE_RES and not is_aa(res, standard=True):
+            if len(list(res.get_atoms())) > 5:
+                ligands.append(f"{res_name} {res.get_parent().id}:{res.id[1]}")
+    
+    sel_lig = st.selectbox("Define Target Pocket Center:", sorted(list(set(ligands))))
+    
+    # Pocket Extraction Logic (8.0 Å)
+    ns = NeighborSearch([a for a in st.session_state.struct.get_atoms() if a.get_parent().get_resname().strip() in RNA_RES])
+    target_res = [r for r in st.session_state.struct.get_residues() if f"{r.get_resname()} {r.get_parent().id}:{r.id[1]}" == sel_lig][0]
+    p_atoms = list(set([at for lat in target_res.get_atoms() for at in ns.search(lat.coord, 8.0)]))
+    st.session_state.p_metrics = calculate_pocket_metrics(p_atoms)
 
-    with open(pdb_path) as f:
-        pdb_data = f.read()
+    # UI Columns
+    m1, m2 = st.columns([2, 1])
+    with m1:
+        st.subheader("3D Binding Site Visualization")
+        view = py3Dmol.view(width=800, height=500)
+        with open(st.session_state.path, 'r') as f: view.addModel(f.read(), 'pdb')
+        view.setStyle({'cartoon': {'color': 'spectrum', 'opacity': 0.8}})
+        l_parts = sel_lig.split(); l_chain, l_resi = l_parts[1].split(':')
+        view.addStyle({'chain': l_chain, 'resi': int(l_resi)}, {'stick': {'colorscheme': 'greenCarbon', 'radius': 0.3}})
+        view.zoomTo({'chain': l_chain, 'resi': int(l_resi)})
+        showmol(view, height=500, width=800)
+    
+    with m2:
+        st.subheader("Pocket Topology")
+        st.metric("Radius of Gyration", f"{st.session_state.p_metrics['Rg']:.2f} Å")
+        st.metric("Mean Depth", f"{st.session_state.p_metrics['Depth']:.2f} Å")
+        st.metric("Curvature", f"{st.session_state.p_metrics['Curve']:.3f}")
 
-    view = py3Dmol.view(width=800, height=500)
-    view.addModel(pdb_data,"pdb")
-
-    view.setStyle({"cartoon":{"color":"spectrum"}})
-
-    view.addStyle({"chain": ligand.get_parent().id,"resi":ligand.id[1]},
-                  {"stick":{"colorscheme":"greenCarbon"}})
-
-    if feat:
-        for c in feat["coords"]:
-            view.addSphere({"center":{"x":c[0],"y":c[1],"z":c[2]},
-                            "radius":0.3,"color":"red"})
-        add_interactions(view, feat["coords"], pocket_atoms)
-
-    view.zoomTo()
-    return view
-
-# =========================
-# FEATURE PLOT
-# =========================
-def plot_features(feat):
-    weights = {
-        "Contact_density":0.35,
-        "Electrostatic_score":0.30,
-        "Hbond_strength":0.10,
-        "Pi_stacking":0.10,
-        "Pocket_depth_mean":0.10,
-        "Curvature":0.05
-    }
-
-    df = pd.DataFrame({
-        "Feature": list(weights.keys()),
-        "Contribution": [feat[k]*weights[k] for k in weights]
-    })
-
-    return px.bar(df, x="Feature", y="Contribution", title="Feature Contribution")
-
-# =========================
-# UI
-# =========================
-st.title("Analysis Workspace")
-
-pdb_file = st.file_uploader("Upload PDB", type="pdb")
-
-if pdb_file:
-
-    with open("temp.pdb","wb") as f:
-        f.write(pdb_file.getbuffer())
-
-    structure = PDBParser(QUIET=True).get_structure("RNA","temp.pdb")
-    ligand = get_ligands(structure)[0]
-    pocket_atoms = extract_pocket(structure, ligand)
-
-    col1,col2 = st.columns([2,1])
-
-    with col1:
-        showmol(visualize("temp.pdb", ligand), height=500)
-
-    with col2:
-        coords = np.array([a.coord for a in pocket_atoms])
-        rg = np.sqrt(np.mean(np.sum((coords-coords.mean(0))**2,1)))
-
-        st.metric("Pocket Radius (Rg)", f"{rg:.2f} Å")
-        st.metric("Atoms", len(pocket_atoms))
-
-    st.markdown("---")
-
-    tab1,tab2,tab3 = st.tabs(["Text","CSV","SDF"])
-
-    library={}
-    sdf_mols=[]
-
-    with tab1:
-        txt = st.text_area("Enter SMILES")
-        if txt:
-            for i,s in enumerate(txt.splitlines()):
-                library[f"Mol_{i}"]=s
-
-    with tab2:
-        f = st.file_uploader("Upload CSV")
-        if f:
-            df=pd.read_csv(f)
-            df.columns=[c.lower() for c in df.columns]
-            library=dict(zip(df.iloc[:,0],df.iloc[:,1]))
-
-    with tab3:
-        f = st.file_uploader("Upload SDF")
-        if f:
-            open("temp.sdf","wb").write(f.getbuffer())
-            for i,m in enumerate(Chem.SDMolSupplier("temp.sdf")):
-                if m:
-                    sdf_mols.append((f"Mol_{i}",m))
-
-    if st.button("Run Screening"):
-
-        results=[]
-
-        items = library.items() if library else sdf_mols
-
-        for name, mol in items:
-
-            if isinstance(mol,str):
-                mol = Chem.MolFromSmiles(mol)
-
-            feat = compute_features(pocket_atoms, mol)
-            prob = predict(feat)
-
-            feat["Ligand"]=name
-            feat["Probability"]=prob
-
-            results.append(feat)
-
-        df=pd.DataFrame(results).sort_values("Probability",ascending=False)
-        st.dataframe(df)
-
-        sel=st.selectbox("Inspect",df["Ligand"])
-        row=df[df["Ligand"]==sel].iloc[0]
-
-        showmol(visualize("temp.pdb", ligand, row, pocket_atoms), height=400)
-
-        st.plotly_chart(plot_features(row))
+    # Screening Workflow
+    st.divider()
+    st.header("Step 2: Virtual Screening")
+    smi_input = st.text_area("Input SMILES Library (One per line)", "Cc1cc(O)c2c(c1)C(=O)c3c(C2=O)cc(O)cc3O", height=150)
+    
+    if st.button("🚀 Run AI-Optimized Screening"):
+        lib = [s.strip() for s in smi_input.splitlines() if s.strip()]
+        results = []
+        prog = st.progress(0)
+        for i, s in enumerate(lib):
+            prob = predict_binding(s, st.session_state.p_metrics)
+            if prob: results.append({"ID": f"LIG_{i+1:03}", "SMILES": s, "Probability": prob})
+            prog.progress((i+1)/len(lib))
+        
+        if results:
+            df = pd.DataFrame(results).sort_values("Probability", ascending=False)
+            df["Probability Sync"] = [(len(df)-i)/len(df) for i in range(len(df))] # Rank-based sync
+            
+            st.subheader("Screening Results")
+            st.dataframe(df, use_container_width=True, column_config={
+                "Probability": st.column_config.ProgressColumn(min_value=0, max_value=1, format="%.4f"),
+                "Probability Sync": st.column_config.NumberColumn(format="%.4f")
+            })
+            st.download_button("📂 Download Predictions (CSV)", df.to_csv(index=False), f"RNALigVS_{pdb_id}_Results.csv")
