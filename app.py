@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import json
 import warnings
+from concurrent.futures import ThreadPoolExecutor
 
 from rdkit import Chem
 from rdkit.Chem import AllChem, Draw
@@ -53,12 +54,10 @@ def extract_pocket(structure, ligand):
                 if is_rna(res):
                     rna_atoms.extend(list(res.get_atoms()))
 
-    ns = NeighborSearch(rna_atoms)
-
     pocket_atoms = []
     for ra in rna_atoms:
         for la in ligand_atoms:
-            if np.linalg.norm(ra.coord - la.coord) < 8:
+            if np.linalg.norm(ra.coord - la.coord) < 6:  # reduced cutoff (faster)
                 pocket_atoms.append(ra)
                 break
 
@@ -68,14 +67,17 @@ def extract_pocket(structure, ligand):
     return pocket_atoms
 
 # =========================
-# SAFE FEATURE EXTRACTION
+# FAST FEATURE EXTRACTION
 # =========================
-def compute_features_smiles(pocket_atoms, mol):
+def compute_features_fast(pocket_atoms, smi):
 
     try:
+        mol = Chem.MolFromSmiles(smi)
+        if mol is None:
+            return None
+
         mol = Chem.AddHs(mol)
 
-        # SAFE EMBEDDING
         if mol.GetNumConformers() == 0:
             status = AllChem.EmbedMolecule(mol, randomSeed=42)
 
@@ -85,7 +87,8 @@ def compute_features_smiles(pocket_atoms, mol):
             if status != 0:
                 return None
 
-            AllChem.UFFOptimizeMolecule(mol)
+            # optional speed boost → comment if needed
+            # AllChem.UFFOptimizeMolecule(mol)
 
         conf = mol.GetConformer()
 
@@ -94,63 +97,43 @@ def compute_features_smiles(pocket_atoms, mol):
             for i in range(mol.GetNumAtoms())
         ])
 
-        # ALIGN TO POCKET
+        # ALIGN
         shift = np.mean([a.coord for a in pocket_atoms], axis=0) - coords.mean(axis=0)
+        coords += shift
 
-        for i in range(mol.GetNumAtoms()):
-            pos = conf.GetAtomPosition(i)
-            conf.SetAtomPosition(i, pos + shift)
+        pocket_coords = np.array([a.coord for a in pocket_atoms])
 
-        coords = np.array([
-            np.array(conf.GetAtomPosition(i))
-            for i in range(mol.GetNumAtoms())
-        ])
+        # 🔥 VECTORIZED DISTANCE
+        dists = np.linalg.norm(coords[:, None, :] - pocket_coords[None, :, :], axis=2)
 
-        # FEATURES
-        elec = hbond = contact = hb_count = 0
+        mask8 = dists < 8
+        mask5 = dists < 5
+        mask35 = dists < 3.5
 
-        for lc in coords:
-            for pa in pocket_atoms:
+        elec = np.sum(1/(dists[mask8]**2 + 1))
+        contact = np.sum(mask5)
 
-                d = np.linalg.norm(lc - pa.coord)
-
-                if d > 8:
-                    continue
-
-                elec += 1/(d**2 + 1)
-
-                if pa.element in ["N","O"] and d < 3.5:
-                    hbond += 1/(d**2 + 0.5)
-                    hb_count += 1
-
-                if d < 5:
-                    contact += 1
+        hbond = np.sum(1/(dists[mask35]**2 + 0.5))
+        hb_count = np.sum(mask35)
 
         ligand_size = max(len(coords), 1)
         contact_safe = max(contact, 1)
 
-        contact_density = contact / ligand_size
-        electrostatic_score = elec / contact_safe
-        hbond_strength = hbond / hb_count if hb_count else 0
-
-        aromatic = Chem.rdMolDescriptors.CalcNumAromaticRings(mol)
-        pi_stacking = aromatic / contact_safe
-
-        pocket_coords = np.array([a.coord for a in pocket_atoms])
-        center = pocket_coords.mean(axis=0)
-        dists = np.linalg.norm(pocket_coords - center, axis=1)
-
-        depth_mean = np.mean(dists)
-        curvature = np.var(dists) / (np.mean(dists) + 1e-6)
-
-        return {
-            "Contact_density": contact_density,
-            "Electrostatic_score": electrostatic_score,
-            "Hbond_strength": hbond_strength,
-            "Pi_stacking": pi_stacking,
-            "Pocket_depth_mean": depth_mean,
-            "Curvature": curvature
+        feat = {
+            "Contact_density": contact / ligand_size,
+            "Electrostatic_score": elec / contact_safe,
+            "Hbond_strength": hbond / hb_count if hb_count else 0,
+            "Pi_stacking": Chem.rdMolDescriptors.CalcNumAromaticRings(mol) / contact_safe,
         }
+
+        # geometry
+        center = pocket_coords.mean(axis=0)
+        dists_p = np.linalg.norm(pocket_coords - center, axis=1)
+
+        feat["Pocket_depth_mean"] = np.mean(dists_p)
+        feat["Curvature"] = np.var(dists_p) / (np.mean(dists_p) + 1e-6)
+
+        return feat
 
     except:
         return None
@@ -205,25 +188,15 @@ if pdb_file:
         f.write(pdb_file.getbuffer())
 
     structure = PDBParser(QUIET=True).get_structure("RNA", "temp.pdb")
-
-    ligands = get_ligands(structure)
-
-    if not ligands:
-        st.error("No ligand found in PDB")
-        st.stop()
-
-    ligand = ligands[0]
+    ligand = get_ligands(structure)[0]
     pocket_atoms = extract_pocket(structure, ligand)
 
     col1, col2 = st.columns([2,1])
 
     with col1:
-        st.subheader("3D Pocket View")
         showmol(visualize("temp.pdb", ligand), height=500)
 
     with col2:
-        st.subheader("Pocket Physics")
-
         coords = np.array([a.coord for a in pocket_atoms])
         rg = np.sqrt(np.mean(np.sum((coords - coords.mean(axis=0))**2, axis=1)))
 
@@ -232,89 +205,55 @@ if pdb_file:
 
     st.markdown("---")
 
-    st.subheader("Virtual Screening")
-
-    # INPUT OPTIONS
-    tab1, tab2 = st.tabs(["Text Input", "CSV Upload"])
-
+    # INPUT
+    tab1, tab2 = st.tabs(["Text", "CSV"])
     library = {}
 
-    # TEXT
     with tab1:
-        txt = st.text_area("Enter SMILES (one per line)")
+        txt = st.text_area("Enter SMILES")
         if txt:
-            for i, smi in enumerate(txt.splitlines()):
-                smi = smi.strip()
-                if smi:
-                    library[f"Mol_{i}"] = smi
+            for i, s in enumerate(txt.splitlines()):
+                library[f"Mol_{i}"] = s
 
-    # CSV
     with tab2:
-        csv_file = st.file_uploader("Upload CSV", type=["csv"])
-        if csv_file:
-            df_csv = pd.read_csv(csv_file)
-            df_csv.columns = [c.lower() for c in df_csv.columns]
-
-            if "name" in df_csv.columns and "smiles" in df_csv.columns:
-                library = dict(zip(df_csv["name"], df_csv["smiles"]))
-            elif "ligand_id" in df_csv.columns and "smiles" in df_csv.columns:
-                library = dict(zip(df_csv["ligand_id"], df_csv["smiles"]))
-            else:
-                st.error("CSV must contain name/smiles or ligand_id/smiles")
-
+        file = st.file_uploader("Upload CSV")
+        if file:
+            df = pd.read_csv(file)
+            df.columns = [c.lower() for c in df.columns]
+            library = dict(zip(df.iloc[:,0], df.iloc[:,1]))
             st.success(f"{len(library)} molecules loaded")
 
     # RUN
     if st.button("Run Screening"):
 
+        progress = st.progress(0)
         results = []
 
-        for name, smi in library.items():
+        items = list(library.items())
 
-            mol = Chem.MolFromSmiles(smi)
-            if mol is None:
-                continue
+        # 🔥 PARALLEL EXECUTION
+        def process(item):
+            name, smi = item
+            feat = compute_features_fast(pocket_atoms, smi)
+            if feat is None:
+                return None
+            feat["Ligand"] = name
+            feat["SMILES"] = smi
+            feat["Probability_model"] = predict(feat)
+            return feat
 
-            feats = compute_features_smiles(pocket_atoms, mol)
-
-            if feats is None:
-                continue
-
-            prob = predict(feats)
-
-            row = feats.copy()
-            row["Ligand"] = name
-            row["SMILES"] = smi
-            row["Probability_model"] = prob
-
-            results.append(row)
-
-        if len(results) == 0:
-            st.error("No valid molecules processed")
-            st.stop()
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            for i, res in enumerate(executor.map(process, items)):
+                progress.progress((i+1)/len(items))
+                if res:
+                    results.append(res)
 
         df = pd.DataFrame(results).sort_values("Probability_model", ascending=False)
 
-        st.dataframe(df, use_container_width=True)
+        st.dataframe(df)
 
-        st.download_button(
-            "Download Results",
-            df.to_csv(index=False),
-            "results.csv"
-        )
+        sel = st.selectbox("Inspect", df["Ligand"])
+        row = df[df["Ligand"]==sel].iloc[0]
 
-        sel = st.selectbox("Inspect Ligand", df["Ligand"])
-        row = df[df["Ligand"] == sel].iloc[0]
-
-        col1, col2 = st.columns([1,2])
-
-        with col1:
-            mol = Chem.MolFromSmiles(row["SMILES"])
-            st.image(Draw.MolToImage(mol))
-
-        with col2:
-            st.metric("Binding Probability", round(row["Probability_model"],3))
-            st.metric("Contact Density", round(row["Contact_density"],3))
-            st.metric("Electrostatic", round(row["Electrostatic_score"],3))
-            st.metric("Hbond", round(row["Hbond_strength"],3))
-            st.metric("π-Stacking", round(row["Pi_stacking"],3))
+        st.image(Draw.MolToImage(Chem.MolFromSmiles(row["SMILES"])))
+        st.metric("Binding Probability", round(row["Probability_model"],3))
