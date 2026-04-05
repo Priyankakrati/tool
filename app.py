@@ -1,6 +1,6 @@
 import streamlit as st
-import numpy as np
 import pandas as pd
+import numpy as np
 import json
 import warnings
 
@@ -16,7 +16,7 @@ from stmol import showmol
 warnings.filterwarnings("ignore")
 
 # =========================
-# LOAD MODEL
+# LOAD MODEL PARAMS
 # =========================
 with open("model_params.json") as f:
     params = json.load(f)
@@ -25,34 +25,25 @@ W = params["weights"]
 MEAN = params["mean"]
 STD = params["std"]
 
-# =========================
-# UI CONFIG
-# =========================
-st.set_page_config(layout="wide")
-st.title("🧬 RNALigVS-Pro: RNA–Ligand Screening")
-
-# =========================
-# RNA + LIGAND DETECTION
-# =========================
 RNA_RES = {"A","C","G","U"}
 IGNORE = {"HOH","WAT"}
 
-def is_rna(res):
-    return res.get_resname().strip() in RNA_RES
-
+# =========================
+# EXTRACT LIGAND
+# =========================
 def get_ligands(structure):
     ligands = []
     for model in structure:
         for chain in model:
             for res in chain:
-                if not is_rna(res) and res.get_resname() not in IGNORE and not is_aa(res):
+                if res.get_resname() not in RNA_RES and res.get_resname() not in IGNORE and not is_aa(res):
                     ligands.append(res)
     return ligands
 
 # =========================
-# EXTRACT POCKET FROM ORIGINAL LIGAND
+# POCKET EXTRACTION
 # =========================
-def extract_pocket(structure, ligand, cutoff=6.0):
+def extract_pocket(structure, ligand):
 
     ligand_atoms = list(ligand.get_atoms())
     rna_atoms = []
@@ -60,22 +51,21 @@ def extract_pocket(structure, ligand, cutoff=6.0):
     for model in structure:
         for chain in model:
             for res in chain:
-                if is_rna(res):
+                if res.get_resname() in RNA_RES:
                     rna_atoms.extend(list(res.get_atoms()))
 
     ns = NeighborSearch(rna_atoms)
 
     pocket_atoms = set()
     for atom in ligand_atoms:
-        neighbors = ns.search(atom.coord, cutoff)
-        pocket_atoms.update(neighbors)
+        pocket_atoms.update(ns.search(atom.coord, 6.0))
 
-    return list(pocket_atoms), ligand_atoms
+    return list(pocket_atoms)
 
 # =========================
-# FEATURE EXTRACTION (FIXED)
+# 🔥 TRAINING-CONSISTENT FEATURES
 # =========================
-def compute_features_smiles(pocket_atoms, mol):
+def compute_features(pocket_atoms, mol):
 
     mol = Chem.AddHs(mol)
     AllChem.EmbedMolecule(mol, randomSeed=42)
@@ -83,17 +73,16 @@ def compute_features_smiles(pocket_atoms, mol):
 
     conf = mol.GetConformer()
 
-    ligand_coords = []
-    for i in range(mol.GetNumAtoms()):
-        pos = conf.GetAtomPosition(i)
-        ligand_coords.append(np.array([pos.x, pos.y, pos.z]))
-
-    ligand_coords = np.array(ligand_coords)
+    ligand_coords = np.array([
+        np.array(conf.GetAtomPosition(i))
+        for i in range(mol.GetNumAtoms())
+    ])
 
     contact = 0
     elec = 0
     hbond = 0
     hb_count = 0
+    vdw = 0
 
     for lc in ligand_coords:
         for pa in pocket_atoms:
@@ -109,6 +98,9 @@ def compute_features_smiles(pocket_atoms, mol):
                 hbond += 1/(d**2 + 0.5)
                 hb_count += 1
 
+            if d < 6:
+                vdw += 1/(d**6 + 1)
+
             if d < 5:
                 contact += 1
 
@@ -117,14 +109,14 @@ def compute_features_smiles(pocket_atoms, mol):
 
     contact_density = contact / ligand_size
     electrostatic_score = elec / contact_safe
+    vdw_score = vdw / contact_safe
     hbond_strength = hbond / hb_count if hb_count > 0 else 0
 
     aromatic = Chem.rdMolDescriptors.CalcNumAromaticRings(mol)
-    pi_stacking = aromatic / (contact_safe + 1)
+    pi_stacking = aromatic / contact_safe
 
     pocket_coords = np.array([a.coord for a in pocket_atoms])
     center = pocket_coords.mean(axis=0)
-
     dists = np.linalg.norm(pocket_coords - center, axis=1)
 
     depth_mean = np.mean(dists)
@@ -140,23 +132,23 @@ def compute_features_smiles(pocket_atoms, mol):
     }
 
 # =========================
-# SCORING
+# FINAL PREDICTION (EXACT TRAINING LOGIC)
 # =========================
 def predict(feat):
 
-    raw = (
-        W["Contact_density"] * feat["Contact_density"] +
-        W["Electrostatic_score"] * feat["Electrostatic_score"] +
-        W["Hbond_strength"] * feat["Hbond_strength"] +
-        W["Pi_stacking"] * feat["Pi_stacking"] +
-        W["Pocket_depth_mean"] * feat["Pocket_depth_mean"] +
-        W["Curvature"] * feat["Curvature"]
+    score = (
+        0.35 * feat["Contact_density"] +
+        0.30 * feat["Electrostatic_score"] +
+        0.10 * feat["Hbond_strength"] +
+        0.10 * feat["Pi_stacking"] +
+        0.10 * feat["Pocket_depth_mean"] +
+        0.05 * feat["Curvature"]
     )
 
-    z = (raw - MEAN) / (STD + 1e-6)
+    z = (score - MEAN) / (STD + 1e-6)
     prob = 1 / (1 + np.exp(-z))
 
-    return raw, prob
+    return prob
 
 # =========================
 # VISUALIZATION
@@ -169,10 +161,8 @@ def visualize(pdb_path, ligand):
     view = py3Dmol.view(width=800, height=500)
     view.addModel(pdb_data, "pdb")
 
-    # RNA cartoon
     view.setStyle({"cartoon": {"color": "spectrum"}})
 
-    # highlight ligand
     resi = ligand.id[1]
     chain = ligand.get_parent().id
 
@@ -185,9 +175,11 @@ def visualize(pdb_path, ligand):
     return view
 
 # =========================
-# INPUT
+# UI (MATCHES ORIGINAL)
 # =========================
-pdb_file = st.file_uploader("Upload RNA PDB", type="pdb")
+st.title("RNALigVS")
+
+pdb_file = st.file_uploader("Upload PDB", type="pdb")
 
 if pdb_file:
 
@@ -200,27 +192,19 @@ if pdb_file:
     ligands = get_ligands(structure)
 
     if not ligands:
-        st.error("No ligand found in PDB")
+        st.error("No ligand found")
         st.stop()
 
     ligand = ligands[0]
 
-    pocket_atoms, ligand_atoms = extract_pocket(structure, ligand)
+    pocket_atoms = extract_pocket(structure, ligand)
 
-    st.subheader("🧬 RNA + Original Ligand")
     view = visualize("temp.pdb", ligand)
     showmol(view, height=500)
 
-    st.success(f"Pocket extracted: {len(pocket_atoms)} atoms")
+    smiles_text = st.text_area("Enter SMILES")
 
-    st.markdown("---")
-
-    # =========================
-    # SMILES INPUT
-    # =========================
-    smiles_text = st.text_area("Enter SMILES (one per line)")
-
-    if st.button("Run Screening"):
+    if st.button("Run"):
 
         smiles_list = [s.strip() for s in smiles_text.split("\n") if s.strip()]
 
@@ -232,45 +216,16 @@ if pdb_file:
             if mol is None:
                 continue
 
-            feats = compute_features_smiles(pocket_atoms, mol)
-
-            score, prob = predict(feats)
+            feats = compute_features(pocket_atoms, mol)
+            prob = predict(feats)
 
             row = feats.copy()
             row["Ligand"] = f"Mol_{i}"
             row["SMILES"] = smi
-            row["Score"] = score
-            row["Probability"] = prob
+            row["Probability_model"] = prob
 
             results.append(row)
 
-        df = pd.DataFrame(results).sort_values("Probability", ascending=False)
+        df = pd.DataFrame(results).sort_values("Probability_model", ascending=False)
 
-        st.subheader("🏆 Top Candidates")
         st.dataframe(df, use_container_width=True)
-
-        st.download_button(
-            "Download Results",
-            df.to_csv(index=False),
-            "results.csv"
-        )
-
-        # =========================
-        # INSPECTOR
-        # =========================
-        sel = st.selectbox("Inspect Ligand", df["Ligand"])
-
-        row = df[df["Ligand"] == sel].iloc[0]
-
-        col1, col2 = st.columns([1,2])
-
-        with col1:
-            mol = Chem.MolFromSmiles(row["SMILES"])
-            st.image(Draw.MolToImage(mol))
-
-        with col2:
-            st.metric("Binding Probability", round(row["Probability"],3))
-            st.metric("Contact Density", round(row["Contact_density"],3))
-            st.metric("Electrostatic", round(row["Electrostatic_score"],3))
-            st.metric("Hbond", round(row["Hbond_strength"],3))
-            st.metric("π-Stacking", round(row["Pi_stacking"],3))
