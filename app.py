@@ -3,20 +3,53 @@ import pandas as pd
 import numpy as np
 import json
 import warnings
+import requests
+from io import BytesIO
+from PIL import Image
 
 from rdkit import Chem
 from rdkit.Chem import AllChem, Draw
 
-from Bio.PDB import PDBParser, NeighborSearch
+from Bio.PDB import PDBParser
 from Bio.PDB.Polypeptide import is_aa
 
 import py3Dmol
 from stmol import showmol
+import plotly.express as px
 
 warnings.filterwarnings("ignore")
 
 # =========================
-# LOAD MODEL PARAMS
+# CONFIG
+# =========================
+st.set_page_config(page_title="RNALigVS", layout="wide")
+
+# =========================
+# LOGO
+# =========================
+logo_url = "https://raw.githubusercontent.com/YOUR_REPO/main/logo.png"
+
+try:
+    response = requests.get(logo_url)
+    logo = Image.open(BytesIO(response.content))
+except:
+    logo = None
+
+col1, col2 = st.columns([1,6])
+with col1:
+    if logo:
+        st.image(logo, width=80)
+
+with col2:
+    st.markdown("""
+    <h1 style='margin-bottom:0;'>RNALigVS</h1>
+    <p style='margin-top:0;'>RNA–Ligand Virtual Screening Platform</p>
+    """, unsafe_allow_html=True)
+
+st.markdown("---")
+
+# =========================
+# LOAD MODEL
 # =========================
 with open("model_params.json") as f:
     params = json.load(f)
@@ -43,7 +76,6 @@ def get_ligands(structure):
     return ligands
 
 def extract_pocket(structure, ligand):
-
     ligand_atoms = list(ligand.get_atoms())
     rna_atoms = []
 
@@ -54,22 +86,18 @@ def extract_pocket(structure, ligand):
                     rna_atoms.extend(list(res.get_atoms()))
 
     pocket_atoms = []
-
     for ra in rna_atoms:
         for la in ligand_atoms:
             if np.linalg.norm(ra.coord - la.coord) < 8:
                 pocket_atoms.append(ra)
                 break
 
-    if len(pocket_atoms) < 10:
-        pocket_atoms = rna_atoms[:200]
-
-    return pocket_atoms
+    return pocket_atoms if len(pocket_atoms) > 10 else rna_atoms[:200]
 
 # =========================
-# FEATURE EXTRACTION (TRAINING CONSISTENT)
+# FEATURE EXTRACTION
 # =========================
-def compute_features_smiles(pocket_atoms, mol):
+def compute_features(pocket_atoms, mol):
 
     mol = Chem.AddHs(mol)
 
@@ -79,32 +107,26 @@ def compute_features_smiles(pocket_atoms, mol):
 
     conf = mol.GetConformer()
 
-    ligand_coords = np.array([
+    coords = np.array([
         np.array(conf.GetAtomPosition(i))
         for i in range(mol.GetNumAtoms())
     ])
 
-    # ALIGN TO POCKET
-    lig_center = ligand_coords.mean(axis=0)
-    pocket_center = np.mean([a.coord for a in pocket_atoms], axis=0)
-
-    shift = pocket_center - lig_center
-
+    # ALIGN
+    shift = np.mean([a.coord for a in pocket_atoms], axis=0) - coords.mean(axis=0)
     for i in range(mol.GetNumAtoms()):
         pos = conf.GetAtomPosition(i)
         conf.SetAtomPosition(i, pos + shift)
 
-    ligand_coords = np.array([
+    coords = np.array([
         np.array(conf.GetAtomPosition(i))
         for i in range(mol.GetNumAtoms())
     ])
 
-    # FEATURES
-    elec = hbond = vdw = contact = hb_count = 0
+    elec = hbond = contact = hb_count = 0
 
-    for lc in ligand_coords:
+    for lc in coords:
         for pa in pocket_atoms:
-
             d = np.linalg.norm(lc - pa.coord)
 
             if d > 8:
@@ -112,80 +134,114 @@ def compute_features_smiles(pocket_atoms, mol):
 
             elec += 1/(d**2 + 1)
 
-            if pa.element in ["N","O"] and d < 3.5:
+            if pa.element in ["O","N"] and d < 3.5:
                 hbond += 1/(d**2 + 0.5)
                 hb_count += 1
-
-            if d < 6:
-                vdw += 1/(d**6 + 1)
 
             if d < 5:
                 contact += 1
 
-    ligand_size = max(len(ligand_coords), 1)
-    contact_safe = max(contact, 1)
-
-    contact_density = contact / ligand_size
-    electrostatic_score = elec / contact_safe
-    hbond_strength = hbond / hb_count if hb_count > 0 else 0
-
-    aromatic = Chem.rdMolDescriptors.CalcNumAromaticRings(mol)
-    pi_stacking = aromatic / contact_safe
+    contact_density = contact / len(coords)
+    electrostatic = elec / max(contact,1)
+    hbond_strength = hbond / hb_count if hb_count else 0
+    pi = Chem.rdMolDescriptors.CalcNumAromaticRings(mol) / max(contact,1)
 
     pocket_coords = np.array([a.coord for a in pocket_atoms])
     center = pocket_coords.mean(axis=0)
     dists = np.linalg.norm(pocket_coords - center, axis=1)
 
-    depth_mean = np.mean(dists)
-    curvature = np.var(dists) / (np.mean(dists) + 1e-6)
+    depth = np.mean(dists)
+    curvature = np.var(dists)/(np.mean(dists)+1e-6)
 
     return {
         "Contact_density": contact_density,
-        "Electrostatic_score": electrostatic_score,
+        "Electrostatic_score": electrostatic,
         "Hbond_strength": hbond_strength,
-        "Pi_stacking": pi_stacking,
-        "Pocket_depth_mean": depth_mean,
-        "Curvature": curvature
+        "Pi_stacking": pi,
+        "Pocket_depth_mean": depth,
+        "Curvature": curvature,
+        "coords": coords,
+        "mol": mol
     }
 
 # =========================
-# FINAL PREDICTION
+# PREDICTION
 # =========================
 def predict(feat):
 
     score = (
-        0.35 * feat["Contact_density"] +
-        0.30 * feat["Electrostatic_score"] +
-        0.10 * feat["Hbond_strength"] +
-        0.10 * feat["Pi_stacking"] +
-        0.10 * feat["Pocket_depth_mean"] +
-        0.05 * feat["Curvature"]
+        0.35*feat["Contact_density"] +
+        0.30*feat["Electrostatic_score"] +
+        0.10*feat["Hbond_strength"] +
+        0.10*feat["Pi_stacking"] +
+        0.10*feat["Pocket_depth_mean"] +
+        0.05*feat["Curvature"]
     )
 
     z = (score - MEAN) / (STD + 1e-6)
-    prob = 1 / (1 + np.exp(-z))
+    return 1/(1+np.exp(-z))
 
-    return prob
+# =========================
+# INTERACTIONS
+# =========================
+def add_interactions(view, coords, pocket_atoms):
+    for lc in coords:
+        for pa in pocket_atoms:
+            d = np.linalg.norm(lc - pa.coord)
+
+            if pa.element in ["O","N"] and d < 3.5:
+                view.addLine({"start": {"x":lc[0],"y":lc[1],"z":lc[2]},
+                              "end": {"x":pa.coord[0],"y":pa.coord[1],"z":pa.coord[2]},
+                              "color":"blue","dashed":True})
+            elif d < 5:
+                view.addLine({"start": {"x":lc[0],"y":lc[1],"z":lc[2]},
+                              "end": {"x":pa.coord[0],"y":pa.coord[1],"z":pa.coord[2]},
+                              "color":"orange"})
 
 # =========================
 # VISUALIZATION
 # =========================
-def visualize(pdb_path, ligand):
+def visualize(pdb_path, ligand, feat=None, pocket_atoms=None):
 
     with open(pdb_path) as f:
         pdb_data = f.read()
 
     view = py3Dmol.view(width=800, height=500)
-    view.addModel(pdb_data, "pdb")
-    view.setStyle({"cartoon": {"color": "spectrum"}})
+    view.addModel(pdb_data,"pdb")
 
-    view.addStyle(
-        {"chain": ligand.get_parent().id, "resi": ligand.id[1]},
-        {"stick": {"colorscheme": "greenCarbon"}}
-    )
+    view.setStyle({"cartoon":{"color":"spectrum"}})
+
+    view.addStyle({"chain": ligand.get_parent().id,"resi":ligand.id[1]},
+                  {"stick":{"colorscheme":"greenCarbon"}})
+
+    if feat:
+        for c in feat["coords"]:
+            view.addSphere({"center":{"x":c[0],"y":c[1],"z":c[2]},
+                            "radius":0.3,"color":"red"})
+        add_interactions(view, feat["coords"], pocket_atoms)
 
     view.zoomTo()
     return view
+
+# =========================
+# FEATURE PLOT
+# =========================
+def plot_features(feat):
+    weights = {
+        "Contact_density":0.35,
+        "Electrostatic_score":0.30,
+        "Hbond_strength":0.10,
+        "Pi_stacking":0.10,
+        "Pocket_depth_mean":0.10,
+        "Curvature":0.05
+    }
+
+    df = pd.DataFrame({
+        "Feature": list(weights.keys()),
+        "Contribution": [feat[k]*weights[k] for k in weights]
+    })
+
+    return px.bar(df, x="Feature", y="Contribution", title="Feature Contribution")
 
 # =========================
 # UI
@@ -196,148 +252,78 @@ pdb_file = st.file_uploader("Upload PDB", type="pdb")
 
 if pdb_file:
 
-    with open("temp.pdb", "wb") as f:
+    with open("temp.pdb","wb") as f:
         f.write(pdb_file.getbuffer())
 
-    parser = PDBParser(QUIET=True)
-    structure = parser.get_structure("RNA", "temp.pdb")
-
-    ligands = get_ligands(structure)
-
-    if not ligands:
-        st.error("No ligand found")
-        st.stop()
-
-    ligand = ligands[0]
+    structure = PDBParser(QUIET=True).get_structure("RNA","temp.pdb")
+    ligand = get_ligands(structure)[0]
     pocket_atoms = extract_pocket(structure, ligand)
 
-    col1, col2 = st.columns([2,1])
+    col1,col2 = st.columns([2,1])
 
     with col1:
-        st.subheader("3D Pocket View")
         showmol(visualize("temp.pdb", ligand), height=500)
 
     with col2:
-        st.subheader("Pocket Physics")
-
         coords = np.array([a.coord for a in pocket_atoms])
-        rg = np.sqrt(np.mean(np.sum((coords - coords.mean(axis=0))**2, axis=1)))
+        rg = np.sqrt(np.mean(np.sum((coords-coords.mean(0))**2,1)))
 
         st.metric("Pocket Radius (Rg)", f"{rg:.2f} Å")
         st.metric("Atoms", len(pocket_atoms))
 
     st.markdown("---")
 
-    st.subheader("Virtual Screening")
+    tab1,tab2,tab3 = st.tabs(["Text","CSV","SDF"])
 
-    # =========================
-    # INPUT OPTIONS
-    # =========================
-    tab1, tab2, tab3 = st.tabs(["Text", "CSV", "SDF"])
-
-    library = {}
-    sdf_molecules = []
+    library={}
+    sdf_mols=[]
 
     with tab1:
-        smiles_text = st.text_area("Enter SMILES")
-
-        if smiles_text:
-            for i, smi in enumerate(smiles_text.splitlines()):
-                smi = smi.strip()
-                if smi:
-                    library[f"Mol_{i}"] = smi
+        txt = st.text_area("Enter SMILES")
+        if txt:
+            for i,s in enumerate(txt.splitlines()):
+                library[f"Mol_{i}"]=s
 
     with tab2:
-        csv_file = st.file_uploader("Upload CSV", type=["csv"])
-
-        if csv_file:
-            df_csv = pd.read_csv(csv_file)
-            df_csv.columns = [c.lower() for c in df_csv.columns]
-
-            if "name" in df_csv.columns and "smiles" in df_csv.columns:
-                library = dict(zip(df_csv["name"], df_csv["smiles"]))
-
-            elif "ligand_id" in df_csv.columns and "smiles" in df_csv.columns:
-                library = dict(zip(df_csv["ligand_id"], df_csv["smiles"]))
-
-            st.success(f"{len(library)} molecules loaded")
+        f = st.file_uploader("Upload CSV")
+        if f:
+            df=pd.read_csv(f)
+            df.columns=[c.lower() for c in df.columns]
+            library=dict(zip(df.iloc[:,0],df.iloc[:,1]))
 
     with tab3:
-        sdf_file = st.file_uploader("Upload SDF", type=["sdf"])
+        f = st.file_uploader("Upload SDF")
+        if f:
+            open("temp.sdf","wb").write(f.getbuffer())
+            for i,m in enumerate(Chem.SDMolSupplier("temp.sdf")):
+                if m:
+                    sdf_mols.append((f"Mol_{i}",m))
 
-        if sdf_file:
-            with open("temp.sdf", "wb") as f:
-                f.write(sdf_file.getbuffer())
-
-            supplier = Chem.SDMolSupplier("temp.sdf")
-
-            for i, mol in enumerate(supplier):
-                if mol is None:
-                    continue
-                name = mol.GetProp("_Name") if mol.HasProp("_Name") else f"Mol_{i}"
-                sdf_molecules.append((name, mol))
-
-            st.success(f"{len(sdf_molecules)} molecules loaded")
-
-    # =========================
-    # RUN SCREENING
-    # =========================
     if st.button("Run Screening"):
 
-        results = []
+        results=[]
 
-        if library:
-            for name, smi in library.items():
+        items = library.items() if library else sdf_mols
 
-                mol = Chem.MolFromSmiles(smi)
-                if mol is None:
-                    continue
+        for name, mol in items:
 
-                feats = compute_features_smiles(pocket_atoms, mol)
-                prob = predict(feats)
+            if isinstance(mol,str):
+                mol = Chem.MolFromSmiles(mol)
 
-                row = feats.copy()
-                row["Ligand"] = name
-                row["SMILES"] = smi
-                row["Probability_model"] = prob
+            feat = compute_features(pocket_atoms, mol)
+            prob = predict(feat)
 
-                results.append(row)
+            feat["Ligand"]=name
+            feat["Probability"]=prob
 
-        elif sdf_molecules:
-            for name, mol in sdf_molecules:
+            results.append(feat)
 
-                feats = compute_features_smiles(pocket_atoms, mol)
-                prob = predict(feats)
+        df=pd.DataFrame(results).sort_values("Probability",ascending=False)
+        st.dataframe(df)
 
-                row = feats.copy()
-                row["Ligand"] = name
-                row["SMILES"] = Chem.MolToSmiles(mol)
-                row["Probability_model"] = prob
+        sel=st.selectbox("Inspect",df["Ligand"])
+        row=df[df["Ligand"]==sel].iloc[0]
 
-                results.append(row)
+        showmol(visualize("temp.pdb", ligand, row, pocket_atoms), height=400)
 
-        df = pd.DataFrame(results).sort_values("Probability_model", ascending=False)
-
-        st.dataframe(df, use_container_width=True)
-
-        st.download_button(
-            "Download Results",
-            df.to_csv(index=False),
-            "results.csv"
-        )
-
-        sel = st.selectbox("Inspect Ligand", df["Ligand"])
-
-        row = df[df["Ligand"] == sel].iloc[0]
-
-        col1, col2 = st.columns([1,2])
-
-        with col1:
-            mol = Chem.MolFromSmiles(row["SMILES"])
-            st.image(Draw.MolToImage(mol))
-
-        with col2:
-            st.metric("Binding Probability", round(row["Probability_model"],3))
-            st.metric("Contact Density", round(row["Contact_density"],3))
-            st.metric("Electrostatic", round(row["Electrostatic_score"],3))
-            st.metric("Hbond", round(row["Hbond_strength"],3))
+        st.plotly_chart(plot_features(row))
