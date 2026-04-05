@@ -16,12 +16,7 @@ from stmol import showmol
 warnings.filterwarnings("ignore")
 
 # =========================
-# CONFIG
-# =========================
-st.set_page_config(page_title="RNALigVS", layout="wide")
-
-# =========================
-# LOAD MODEL
+# LOAD MODEL PARAMS
 # =========================
 with open("model_params.json") as f:
     params = json.load(f)
@@ -33,263 +28,254 @@ RNA_RES = {"A","C","G","U"}
 IGNORE = {"HOH","WAT"}
 
 # =========================
-# NAVIGATION
+# GET LIGAND FROM PDB
 # =========================
-page = st.sidebar.radio(
-    "Navigation",
-    ["🏠 Home", "🧬 Run Prediction", "📘 Tutorial"]
-)
+def get_ligands(structure):
+    ligands = []
+    for model in structure:
+        for chain in model:
+            for res in chain:
+                if res.get_resname() not in RNA_RES and res.get_resname() not in IGNORE and not is_aa(res):
+                    ligands.append(res)
+    return ligands
 
-# ============================================================
-# 🏠 HOME PAGE
-# ============================================================
-if page == "🏠 Home":
+# =========================
+# EXTRACT POCKET
+# =========================
+def extract_pocket(structure, ligand):
 
-    st.markdown("# RNALigVS: A Virtual screening tool for RNA and small molecules")
-    st.markdown("### Structure-Based RNA Virtual Screening")
+    ligand_atoms = list(ligand.get_atoms())
+    rna_atoms = []
 
-    st.markdown("---")
+    for model in structure:
+        for chain in model:
+            for res in chain:
+                if res.get_resname() in RNA_RES:
+                    rna_atoms.extend(list(res.get_atoms()))
 
-    st.markdown("""
-RNALigVS is an RNA-focused virtual screening platform that evaluates small molecules using
-biophysical interaction principles derived from RNA–ligand structural data.
+    ns = NeighborSearch(rna_atoms)
 
-The tool automatically:
+    pocket_atoms = set()
+    for atom in ligand_atoms:
+        pocket_atoms.update(ns.search(atom.coord, 6.0))
 
-• identifies the RNA binding pocket  
-• extracts pocket physicochemical features  
-• evaluates ligand compatibility using physics-informed scoring  
-""")
+    return list(pocket_atoms)
 
-    st.markdown("")
+# =========================
+# 🔥 ALIGN LIGAND INTO POCKET
+# =========================
+def prepare_ligand(mol, pocket_atoms):
 
-    c1, c2, c3, c4 = st.columns(4)
+    mol = Chem.AddHs(mol)
+    AllChem.EmbedMolecule(mol, randomSeed=42)
+    AllChem.UFFOptimizeMolecule(mol)
 
-    with c1:
-        st.info("⚡ **Electrostatics**\n\nRNA backbone charges drive ligand interaction")
+    conf = mol.GetConformer()
 
-    with c2:
-        st.info("🥞 **π-Stacking**\n\nAromatic interactions with RNA bases")
+    lig_coords = np.array([
+        np.array(conf.GetAtomPosition(i))
+        for i in range(mol.GetNumAtoms())
+    ])
+    lig_center = lig_coords.mean(axis=0)
 
-    with c3:
-        st.info("📐 **Shape Complementarity**\n\nPocket–ligand geometric fit")
+    pocket_coords = np.array([a.coord for a in pocket_atoms])
+    pocket_center = pocket_coords.mean(axis=0)
 
-    with c4:
-        st.info("💊 **Drug-Likeness**\n\nQED & Lipinski filtering")
+    shift = pocket_center - lig_center
 
-    st.markdown("---")
+    for i in range(mol.GetNumAtoms()):
+        pos = conf.GetAtomPosition(i)
+        conf.SetAtomPosition(i, pos + shift)
 
-    if st.button("🚀 Start Analysis"):
-        st.session_state.page = "🧬 Run Prediction"
+    return mol
 
+# =========================
+# FEATURE EXTRACTION (TRAINING CONSISTENT)
+# =========================
+def compute_features(pocket_atoms, mol):
 
-# ============================================================
-# 🧬 RUN PREDICTION PAGE
-# ============================================================
-elif page == "🧬 Run Prediction":
+    mol = prepare_ligand(mol, pocket_atoms)
+    conf = mol.GetConformer()
 
-    st.title("RNALigVS")
+    ligand_coords = np.array([
+        np.array(conf.GetAtomPosition(i))
+        for i in range(mol.GetNumAtoms())
+    ])
 
-    # ---------- FUNCTIONS ----------
-    def get_ligands(structure):
-        ligands = []
-        for model in structure:
-            for chain in model:
-                for res in chain:
-                    if res.get_resname() not in RNA_RES and res.get_resname() not in IGNORE and not is_aa(res):
-                        ligands.append(res)
-        return ligands
+    contact = 0
+    elec = 0
+    hbond = 0
+    hb_count = 0
+    vdw = 0
 
-    def extract_pocket(structure, ligand):
-        ligand_atoms = list(ligand.get_atoms())
-        rna_atoms = []
+    for lc in ligand_coords:
+        for pa in pocket_atoms:
 
-        for model in structure:
-            for chain in model:
-                for res in chain:
-                    if res.get_resname() in RNA_RES:
-                        rna_atoms.extend(list(res.get_atoms()))
+            d = np.linalg.norm(lc - pa.coord)
 
-        ns = NeighborSearch(rna_atoms)
-        pocket_atoms = set()
+            if d > 8:
+                continue
 
-        for atom in ligand_atoms:
-            pocket_atoms.update(ns.search(atom.coord, 6.0))
+            elec += 1/(d**2 + 1)
 
-        return list(pocket_atoms)
+            if d < 3.5:
+                hbond += 1/(d**2 + 0.5)
+                hb_count += 1
 
-    def prepare_ligand(mol, pocket_atoms):
+            if d < 6:
+                vdw += 1/(d**6 + 1)
 
-        mol = Chem.AddHs(mol)
-        AllChem.EmbedMolecule(mol, randomSeed=42)
-        AllChem.UFFOptimizeMolecule(mol)
+            if d < 5:
+                contact += 1
 
-        conf = mol.GetConformer()
+    ligand_size = max(len(ligand_coords), 1)
+    contact_safe = max(contact, 1)
 
-        lig_center = np.mean([
-            np.array(conf.GetAtomPosition(i))
-            for i in range(mol.GetNumAtoms())
-        ], axis=0)
+    contact_density = contact / ligand_size
+    electrostatic_score = elec / contact_safe
+    hbond_strength = hbond / hb_count if hb_count > 0 else 0
 
-        pocket_center = np.mean([a.coord for a in pocket_atoms], axis=0)
+    aromatic = Chem.rdMolDescriptors.CalcNumAromaticRings(mol)
+    pi_stacking = aromatic / contact_safe
 
-        shift = pocket_center - lig_center
+    pocket_coords = np.array([a.coord for a in pocket_atoms])
+    center = pocket_coords.mean(axis=0)
+    dists = np.linalg.norm(pocket_coords - center, axis=1)
 
-        for i in range(mol.GetNumAtoms()):
-            pos = conf.GetAtomPosition(i)
-            conf.SetAtomPosition(i, pos + shift)
+    depth_mean = np.mean(dists)
+    curvature = np.var(dists) / (np.mean(dists) + 1e-6)
 
-        return mol
+    return {
+        "Contact_density": contact_density,
+        "Electrostatic_score": electrostatic_score,
+        "Hbond_strength": hbond_strength,
+        "Pi_stacking": pi_stacking,
+        "Pocket_depth_mean": depth_mean,
+        "Curvature": curvature
+    }
 
-    def compute_features(pocket_atoms, mol):
+# =========================
+# FINAL PREDICTION (MATCH TRAINING)
+# =========================
+def predict(feat):
 
-        mol = prepare_ligand(mol, pocket_atoms)
-        conf = mol.GetConformer()
+    score = (
+        0.35 * feat["Contact_density"] +
+        0.30 * feat["Electrostatic_score"] +
+        0.10 * feat["Hbond_strength"] +
+        0.10 * feat["Pi_stacking"] +
+        0.10 * feat["Pocket_depth_mean"] +
+        0.05 * feat["Curvature"]
+    )
 
-        ligand_coords = np.array([
-            np.array(conf.GetAtomPosition(i))
-            for i in range(mol.GetNumAtoms())
-        ])
+    z = (score - MEAN) / (STD + 1e-6)
+    prob = 1 / (1 + np.exp(-z))
 
-        contact = elec = hbond = hb_count = vdw = 0
+    return prob
 
-        for lc in ligand_coords:
-            for pa in pocket_atoms:
+# =========================
+# VISUALIZATION
+# =========================
+def visualize(pdb_path, ligand):
 
-                d = np.linalg.norm(lc - pa.coord)
+    with open(pdb_path) as f:
+        pdb_data = f.read()
 
-                if d > 8: continue
+    view = py3Dmol.view(width=800, height=500)
+    view.addModel(pdb_data, "pdb")
 
-                elec += 1/(d**2 + 1)
+    view.setStyle({"cartoon": {"color": "spectrum"}})
 
-                if d < 3.5:
-                    hbond += 1/(d**2 + 0.5)
-                    hb_count += 1
+    resi = ligand.id[1]
+    chain = ligand.get_parent().id
 
-                if d < 6:
-                    vdw += 1/(d**6 + 1)
+    view.addStyle(
+        {"chain": chain, "resi": resi},
+        {"stick": {"colorscheme": "greenCarbon"}}
+    )
 
-                if d < 5:
-                    contact += 1
+    view.zoomTo()
+    return view
 
-        ligand_size = max(len(ligand_coords), 1)
-        contact_safe = max(contact, 1)
+# =========================
+# UI (SAME STYLE)
+# =========================
+st.title("RNALigVS")
 
-        return {
-            "Contact_density": contact / ligand_size,
-            "Electrostatic_score": elec / contact_safe,
-            "Hbond_strength": hbond / hb_count if hb_count else 0,
-            "Pi_stacking": Chem.rdMolDescriptors.CalcNumAromaticRings(mol) / contact_safe,
-            "Pocket_depth_mean": np.mean(np.linalg.norm(
-                np.array([a.coord for a in pocket_atoms]) -
-                np.mean([a.coord for a in pocket_atoms], axis=0), axis=1)),
-            "Curvature": np.var([a.coord for a in pocket_atoms])
-        }
+pdb_file = st.file_uploader("Upload PDB", type="pdb")
 
-    def predict(feat):
-        score = (
-            0.35 * feat["Contact_density"] +
-            0.30 * feat["Electrostatic_score"] +
-            0.10 * feat["Hbond_strength"] +
-            0.10 * feat["Pi_stacking"] +
-            0.10 * feat["Pocket_depth_mean"] +
-            0.05 * feat["Curvature"]
+if pdb_file:
+
+    with open("temp.pdb", "wb") as f:
+        f.write(pdb_file.getbuffer())
+
+    parser = PDBParser(QUIET=True)
+    structure = parser.get_structure("RNA", "temp.pdb")
+
+    ligands = get_ligands(structure)
+
+    if not ligands:
+        st.error("No ligand found in PDB")
+        st.stop()
+
+    ligand = ligands[0]
+
+    pocket_atoms = extract_pocket(structure, ligand)
+
+    view = visualize("temp.pdb", ligand)
+    showmol(view, height=500)
+
+    st.success(f"Pocket extracted: {len(pocket_atoms)} atoms")
+
+    smiles_text = st.text_area("Enter SMILES (one per line)")
+
+    if st.button("Run"):
+
+        smiles_list = [s.strip() for s in smiles_text.split("\n") if s.strip()]
+
+        results = []
+
+        for i, smi in enumerate(smiles_list):
+
+            mol = Chem.MolFromSmiles(smi)
+            if mol is None:
+                continue
+
+            feats = compute_features(pocket_atoms, mol)
+            prob = predict(feats)
+
+            row = feats.copy()
+            row["Ligand"] = f"Mol_{i}"
+            row["SMILES"] = smi
+            row["Probability_model"] = prob
+
+            results.append(row)
+
+        df = pd.DataFrame(results).sort_values("Probability_model", ascending=False)
+
+        st.subheader("🏆 Top Candidates")
+        st.dataframe(df, use_container_width=True)
+
+        st.download_button(
+            "Download Results",
+            df.to_csv(index=False),
+            "results.csv"
         )
-        z = (score - MEAN) / (STD + 1e-6)
-        return 1 / (1 + np.exp(-z))
 
-    def visualize(pdb_path, ligand):
-        with open(pdb_path) as f:
-            pdb_data = f.read()
+        # Inspector
+        sel = st.selectbox("Inspect Ligand", df["Ligand"])
 
-        view = py3Dmol.view(width=800, height=500)
-        view.addModel(pdb_data, "pdb")
-        view.setStyle({"cartoon": {"color": "spectrum"}})
+        row = df[df["Ligand"] == sel].iloc[0]
 
-        view.addStyle(
-            {"chain": ligand.get_parent().id, "resi": ligand.id[1]},
-            {"stick": {"colorscheme": "greenCarbon"}}
-        )
+        col1, col2 = st.columns([1,2])
 
-        view.zoomTo()
-        return view
+        with col1:
+            mol = Chem.MolFromSmiles(row["SMILES"])
+            st.image(Draw.MolToImage(mol))
 
-    # ---------- UI ----------
-    pdb_file = st.file_uploader("Upload PDB", type="pdb")
-
-    if pdb_file:
-
-        with open("temp.pdb", "wb") as f:
-            f.write(pdb_file.getbuffer())
-
-        parser = PDBParser(QUIET=True)
-        structure = parser.get_structure("RNA", "temp.pdb")
-
-        ligands = get_ligands(structure)
-
-        if not ligands:
-            st.error("No ligand found")
-            st.stop()
-
-        ligand = ligands[0]
-        pocket_atoms = extract_pocket(structure, ligand)
-
-        showmol(visualize("temp.pdb", ligand), height=500)
-
-        st.success(f"Pocket extracted: {len(pocket_atoms)} atoms")
-
-        smiles_text = st.text_area("Enter SMILES (one per line)")
-
-        if st.button("Run Screening"):
-
-            results = []
-
-            for i, smi in enumerate(smiles_text.split("\n")):
-
-                mol = Chem.MolFromSmiles(smi.strip())
-                if mol is None: continue
-
-                feats = compute_features(pocket_atoms, mol)
-                prob = predict(feats)
-
-                feats["Ligand"] = f"Mol_{i}"
-                feats["SMILES"] = smi
-                feats["Probability_model"] = prob
-
-                results.append(feats)
-
-            df = pd.DataFrame(results).sort_values("Probability_model", ascending=False)
-
-            st.dataframe(df, use_container_width=True)
-
-# ============================================================
-# 📘 TUTORIAL PAGE
-# ============================================================
-elif page == "📘 Tutorial":
-
-    st.title("📘 How to Use RNALigVS")
-
-    st.markdown("""
-### Step 1: Upload RNA Structure
-Upload a PDB file containing RNA + ligand.
-
-### Step 2: Pocket Detection
-Tool automatically extracts binding pocket.
-
-### Step 3: Enter Ligands
-Paste SMILES (one per line).
-
-### Step 4: Run Screening
-Click **Run Screening**.
-
-### Step 5: Interpret Results
-- High Probability → strong binder  
-- Analyze features for mechanism  
-
----
-
-### Tips:
-- Use curated ligand libraries  
-- Prefer drug-like molecules  
-- Validate top hits with docking/MD  
-""")
+        with col2:
+            st.metric("Binding Probability", round(row["Probability_model"],3))
+            st.metric("Contact Density", round(row["Contact_density"],3))
+            st.metric("Electrostatic", round(row["Electrostatic_score"],3))
+            st.metric("Hbond", round(row["Hbond_strength"],3))
+            st.metric("π-Stacking", round(row["Pi_stacking"],3))
