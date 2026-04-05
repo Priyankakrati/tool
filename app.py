@@ -53,9 +53,8 @@ def extract_pocket(structure, ligand):
                 if is_rna(res):
                     rna_atoms.extend(list(res.get_atoms()))
 
-    ns = NeighborSearch(rna_atoms)
-
     pocket_atoms = []
+
     for ra in rna_atoms:
         for la in ligand_atoms:
             if np.linalg.norm(ra.coord - la.coord) < 8:
@@ -68,13 +67,15 @@ def extract_pocket(structure, ligand):
     return pocket_atoms
 
 # =========================
-# FEATURE EXTRACTION (EXACT TRAINING LOGIC)
+# FEATURE EXTRACTION (TRAINING CONSISTENT)
 # =========================
 def compute_features_smiles(pocket_atoms, mol):
 
     mol = Chem.AddHs(mol)
-    AllChem.EmbedMolecule(mol, randomSeed=42)
-    AllChem.UFFOptimizeMolecule(mol)
+
+    if mol.GetNumConformers() == 0:
+        AllChem.EmbedMolecule(mol, randomSeed=42)
+        AllChem.UFFOptimizeMolecule(mol)
 
     conf = mol.GetConformer()
 
@@ -83,7 +84,7 @@ def compute_features_smiles(pocket_atoms, mol):
         for i in range(mol.GetNumAtoms())
     ])
 
-    # ALIGN LIGAND INTO POCKET
+    # ALIGN TO POCKET
     lig_center = ligand_coords.mean(axis=0)
     pocket_center = np.mean([a.coord for a in pocket_atoms], axis=0)
 
@@ -98,14 +99,8 @@ def compute_features_smiles(pocket_atoms, mol):
         for i in range(mol.GetNumAtoms())
     ])
 
-    # =========================
-    # EXACT FEATURE CALCULATION
-    # =========================
-    elec = 0
-    hbond = 0
-    vdw = 0
-    contact = 0
-    hb_count = 0
+    # FEATURES
+    elec = hbond = vdw = contact = hb_count = 0
 
     for lc in ligand_coords:
         for pa in pocket_atoms:
@@ -115,19 +110,15 @@ def compute_features_smiles(pocket_atoms, mol):
             if d > 8:
                 continue
 
-            # Electrostatic
             elec += 1/(d**2 + 1)
 
-            # Hbond
             if pa.element in ["N","O"] and d < 3.5:
                 hbond += 1/(d**2 + 0.5)
                 hb_count += 1
 
-            # vdW
             if d < 6:
                 vdw += 1/(d**6 + 1)
 
-            # Contact
             if d < 5:
                 contact += 1
 
@@ -143,7 +134,6 @@ def compute_features_smiles(pocket_atoms, mol):
 
     pocket_coords = np.array([a.coord for a in pocket_atoms])
     center = pocket_coords.mean(axis=0)
-
     dists = np.linalg.norm(pocket_coords - center, axis=1)
 
     depth_mean = np.mean(dists)
@@ -159,7 +149,7 @@ def compute_features_smiles(pocket_atoms, mol):
     }
 
 # =========================
-# FINAL MODEL (EXACT TRAINING EQUATION)
+# FINAL PREDICTION
 # =========================
 def predict(feat):
 
@@ -173,7 +163,6 @@ def predict(feat):
     )
 
     z = (score - MEAN) / (STD + 1e-6)
-
     prob = 1 / (1 + np.exp(-z))
 
     return prob
@@ -199,7 +188,7 @@ def visualize(pdb_path, ligand):
     return view
 
 # =========================
-# UI (UNCHANGED STYLE)
+# UI
 # =========================
 st.title("Analysis Workspace")
 
@@ -216,11 +205,10 @@ if pdb_file:
     ligands = get_ligands(structure)
 
     if not ligands:
-        st.error("No ligand found in PDB")
+        st.error("No ligand found")
         st.stop()
 
     ligand = ligands[0]
-
     pocket_atoms = extract_pocket(structure, ligand)
 
     col1, col2 = st.columns([2,1])
@@ -242,27 +230,91 @@ if pdb_file:
 
     st.subheader("Virtual Screening")
 
-    smiles = st.text_area("Enter SMILES (one per line)")
+    # =========================
+    # INPUT OPTIONS
+    # =========================
+    tab1, tab2, tab3 = st.tabs(["Text", "CSV", "SDF"])
 
+    library = {}
+    sdf_molecules = []
+
+    with tab1:
+        smiles_text = st.text_area("Enter SMILES")
+
+        if smiles_text:
+            for i, smi in enumerate(smiles_text.splitlines()):
+                smi = smi.strip()
+                if smi:
+                    library[f"Mol_{i}"] = smi
+
+    with tab2:
+        csv_file = st.file_uploader("Upload CSV", type=["csv"])
+
+        if csv_file:
+            df_csv = pd.read_csv(csv_file)
+            df_csv.columns = [c.lower() for c in df_csv.columns]
+
+            if "name" in df_csv.columns and "smiles" in df_csv.columns:
+                library = dict(zip(df_csv["name"], df_csv["smiles"]))
+
+            elif "ligand_id" in df_csv.columns and "smiles" in df_csv.columns:
+                library = dict(zip(df_csv["ligand_id"], df_csv["smiles"]))
+
+            st.success(f"{len(library)} molecules loaded")
+
+    with tab3:
+        sdf_file = st.file_uploader("Upload SDF", type=["sdf"])
+
+        if sdf_file:
+            with open("temp.sdf", "wb") as f:
+                f.write(sdf_file.getbuffer())
+
+            supplier = Chem.SDMolSupplier("temp.sdf")
+
+            for i, mol in enumerate(supplier):
+                if mol is None:
+                    continue
+                name = mol.GetProp("_Name") if mol.HasProp("_Name") else f"Mol_{i}"
+                sdf_molecules.append((name, mol))
+
+            st.success(f"{len(sdf_molecules)} molecules loaded")
+
+    # =========================
+    # RUN SCREENING
+    # =========================
     if st.button("Run Screening"):
 
         results = []
 
-        for i, smi in enumerate(smiles.splitlines()):
+        if library:
+            for name, smi in library.items():
 
-            mol = Chem.MolFromSmiles(smi.strip())
-            if mol is None:
-                continue
+                mol = Chem.MolFromSmiles(smi)
+                if mol is None:
+                    continue
 
-            feats = compute_features_smiles(pocket_atoms, mol)
-            prob = predict(feats)
+                feats = compute_features_smiles(pocket_atoms, mol)
+                prob = predict(feats)
 
-            row = feats.copy()
-            row["Ligand"] = f"Mol_{i}"
-            row["SMILES"] = smi
-            row["Probability_model"] = prob
+                row = feats.copy()
+                row["Ligand"] = name
+                row["SMILES"] = smi
+                row["Probability_model"] = prob
 
-            results.append(row)
+                results.append(row)
+
+        elif sdf_molecules:
+            for name, mol in sdf_molecules:
+
+                feats = compute_features_smiles(pocket_atoms, mol)
+                prob = predict(feats)
+
+                row = feats.copy()
+                row["Ligand"] = name
+                row["SMILES"] = Chem.MolToSmiles(mol)
+                row["Probability_model"] = prob
+
+                results.append(row)
 
         df = pd.DataFrame(results).sort_values("Probability_model", ascending=False)
 
@@ -289,4 +341,3 @@ if pdb_file:
             st.metric("Contact Density", round(row["Contact_density"],3))
             st.metric("Electrostatic", round(row["Electrostatic_score"],3))
             st.metric("Hbond", round(row["Hbond_strength"],3))
-            st.metric("π-Stacking", round(row["Pi_stacking"],3))
