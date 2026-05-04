@@ -31,26 +31,22 @@ MEAN = 16.62
 STD = 35.71
 
 # -------------------------------
-# POCKET EXTRACTION (FAST)
+# POCKET EXTRACTION
 # -------------------------------
 def extract_pocket_coords(structure):
-
     coords = []
-
     for model in structure:
         for chain in model:
             for res in chain:
                 if res.get_resname().strip() in RNA_RES:
                     for atom in res:
                         coords.append(atom.coord)
-
     return np.array(coords)
 
 # -------------------------------
 # POCKET FEATURES
 # -------------------------------
 def compute_pocket_features(coords):
-
     center = coords.mean(axis=0)
     dists = np.linalg.norm(coords - center, axis=1)
 
@@ -61,26 +57,24 @@ def compute_pocket_features(coords):
     eig = sorted(np.real(eig))
     curvature = eig[0]/eig[-1] if eig[-1] != 0 else 0
 
-    return depth, curvature, center
+    return depth, curvature
 
 # -------------------------------
-# SAFE LIGAND
+# SAFE LIGAND GENERATION
 # -------------------------------
 def generate_ligand(smiles):
-
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
         return None
 
     mol = Chem.AddHs(mol)
 
-    if AllChem.EmbedMolecule(mol, randomSeed=42) != 0:
-        return None
-
     try:
+        if AllChem.EmbedMolecule(mol, randomSeed=42) != 0:
+            return None
         AllChem.UFFOptimizeMolecule(mol)
     except:
-        pass
+        return None
 
     if mol.GetNumConformers() == 0:
         return None
@@ -88,36 +82,43 @@ def generate_ligand(smiles):
     return mol
 
 # -------------------------------
-# FAST FEATURE COMPUTATION
+# FAST FEATURE CALCULATION
 # -------------------------------
 def compute_features_fast(mol, pocket_coords):
 
     conf = mol.GetConformer()
 
-    lig_coords = np.array([conf.GetAtomPosition(i) for i in range(mol.GetNumAtoms())])
-    lig_coords = np.array([[p.x, p.y, p.z] for p in lig_coords])
+    # ✅ FIXED LINE (no error now)
+    lig_coords = np.array([
+        list(conf.GetAtomPosition(i)) for i in range(mol.GetNumAtoms())
+    ])
 
-    # Distance matrix (vectorized)
-    dists = np.linalg.norm(lig_coords[:, None, :] - pocket_coords[None, :, :], axis=2)
+    # distance matrix
+    dists = np.linalg.norm(
+        lig_coords[:, None, :] - pocket_coords[None, :, :],
+        axis=2
+    )
 
-    # CONTACT
     contact = np.sum(dists < 5)
     ligand_size = max(len(lig_coords), 1)
     contact_density = contact / ligand_size
 
-    # ELECTROSTATIC
     elec = np.sum(1/(dists**2 + 1))
-    electrostatic_score = elec / max(contact,1)
+    electrostatic_score = elec / max(contact, 1)
 
-    # HBOND
     hb_mask = dists < 3.5
-    hbond = np.sum(1/(dists[hb_mask]**2 + 0.5)) if np.any(hb_mask) else 0
-    hbond_strength = hbond / max(np.sum(hb_mask),1)
+    if np.any(hb_mask):
+        hbond = np.sum(1/(dists[hb_mask]**2 + 0.5))
+        hbond_strength = hbond / np.sum(hb_mask)
+    else:
+        hbond_strength = 0
 
-    # PI STACKING
     pi_mask = (dists > 3.0) & (dists < 4.5)
-    pi = np.sum(1/(dists[pi_mask]**2)) if np.any(pi_mask) else 0
-    pi_stack = pi / max(contact,1)
+    if np.any(pi_mask):
+        pi = np.sum(1/(dists[pi_mask]**2))
+        pi_stack = pi / max(contact, 1)
+    else:
+        pi_stack = 0
 
     return contact_density, electrostatic_score, hbond_strength, pi_stack
 
@@ -129,16 +130,19 @@ def calculate_probability(feats, depth, curvature):
     cd, elec, hb, pi = feats
 
     score = (
-        0.35*cd + 0.30*elec +
-        0.10*hb + 0.10*pi +
-        0.10*depth + 0.05*curvature
+        0.35*cd +
+        0.30*elec +
+        0.10*hb +
+        0.10*pi +
+        0.10*depth +
+        0.05*curvature
     )
 
     z = (score - MEAN)/STD
     return 1/(1+np.exp(-z))
 
 # -------------------------------
-# 3D VIEW WITH POCKET
+# 3D VISUALIZATION
 # -------------------------------
 def show_structure_with_pocket(pdb_path, pocket_coords):
 
@@ -147,10 +151,10 @@ def show_structure_with_pocket(pdb_path, pocket_coords):
 
     view = py3Dmol.view(width=800, height=500)
     view.addModel(pdb, "pdb")
-    view.setStyle({"cartoon": {"color":"spectrum"}})
+    view.setStyle({"cartoon": {"color": "spectrum"}})
 
     # highlight pocket atoms
-    for c in pocket_coords[:300]:  # limit for speed
+    for c in pocket_coords[:300]:
         view.addSphere({
             "center": {"x": float(c[0]), "y": float(c[1]), "z": float(c[2])},
             "radius": 0.5,
@@ -180,7 +184,7 @@ if structure_file:
     structure = parser.get_structure("RNA", pdb_path)
 
     pocket_coords = extract_pocket_coords(structure)
-    depth, curvature, center = compute_pocket_features(pocket_coords)
+    depth, curvature = compute_pocket_features(pocket_coords)
 
     st.subheader("RNA Structure + Pocket")
     showmol(show_structure_with_pocket(pdb_path, pocket_coords))
@@ -194,7 +198,6 @@ if st.button("🚀 Run Virtual Screening"):
         st.warning("Upload both inputs")
         st.stop()
 
-    # SMILES
     if smiles_file.name.endswith(".csv"):
         df_sm = pd.read_csv(smiles_file)
         smiles_list = df_sm.iloc[:,0].tolist()
@@ -237,10 +240,9 @@ if st.button("🚀 Run Virtual Screening"):
 
     st.success("✅ Screening Completed")
 
-    st.subheader("Top Results")
+    st.subheader("Top Hits")
     st.dataframe(df_rank.head(20))
 
-    # DOWNLOADS
     st.download_button(
         "📥 Download Ranking CSV",
         df_rank.to_csv(index=False),
