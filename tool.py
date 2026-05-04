@@ -1,65 +1,65 @@
 import streamlit as st
-import pandas as pd
 import numpy as np
-from rdkit import Chem
-from rdkit.Chem import Descriptors, rdMolDescriptors, AllChem
-from rdkit.Chem import rdPartialCharges
-from Bio.PDB import PDBParser, NeighborSearch
+import pandas as pd
 import tempfile
+from Bio.PDB import PDBParser
+from rdkit import Chem
+from rdkit.Chem import AllChem
 
 st.set_page_config(page_title="RNALigVS", layout="wide")
-st.image("RNALigVS_logo.png", width=160)
+st.image("RNALigVS_logo.png", width=180)
 
-st.title("🧬 RNALigVS: RNA-Ligand Virtual Screening")
-
-# -------------------------------
-# RNA DEFINITIONS
-# -------------------------------
-RNA_NAMES = {"A","C","G","U","I","PSU","5MC","7MG"}
-IGNORE = {"HOH","WAT"}
-
-def is_rna(res):
-    return res.get_resname().strip() in RNA_NAMES
+st.title("🧬 RNALigVS: RNA-Ligand Virtual Screening Tool")
 
 # -------------------------------
-# POCKET EXTRACTION
+# CONSTANTS
+# -------------------------------
+RNA_RES = {"A","C","G","U"}
+
+WEIGHTS = {
+    "Contact_density": 0.35,
+    "Electrostatic_score": 0.30,
+    "Hbond_strength": 0.10,
+    "Pi_stacking": 0.10,
+    "Pocket_depth_mean": 0.10,
+    "Curvature": 0.05
+}
+
+MEAN = 16.62
+STD = 35.71
+
+# -------------------------------
+# EXTRACT RNA POCKET
 # -------------------------------
 def extract_rna_atoms(structure):
     atoms = []
     for model in structure:
         for chain in model:
             for res in chain:
-                if is_rna(res):
+                if res.get_resname().strip() in RNA_RES:
                     atoms.extend(list(res.get_atoms()))
     return atoms
 
 def compute_pocket_features(rna_atoms):
+
     coords = np.array([a.coord for a in rna_atoms])
     center = coords.mean(axis=0)
+
     dists = np.linalg.norm(coords - center, axis=1)
 
-    rg = np.sqrt(np.mean(np.sum((coords - center)**2, axis=1)))
+    depth_mean = np.mean(dists)
 
     cov = np.cov(coords.T)
     eig = np.linalg.eigvals(cov)
     eig = sorted(np.real(eig))
     curvature = eig[0]/eig[-1] if eig[-1] != 0 else 0
 
-    neg_oxygens = [a for a in rna_atoms if a.element == "O"]
-    polar_atoms = [a for a in rna_atoms if a.element in ["O","N"]]
-
-    return {
-        "Rg": rg,
-        "Curvature": curvature,
-        "Neg_Oxygens": neg_oxygens,
-        "Polar_Atoms": polar_atoms,
-        "All": rna_atoms
-    }
+    return depth_mean, curvature
 
 # -------------------------------
-# LIGAND FEATURES
+# GENERATE LIGAND (3D)
 # -------------------------------
-def ligand_features(smiles):
+def generate_ligand(smiles):
 
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
@@ -73,77 +73,81 @@ def ligand_features(smiles):
     except:
         pass
 
-    try:
-        rdPartialCharges.ComputeGasteigerCharges(mol)
-        charges = [float(a.GetDoubleProp("_GasteigerCharge")) for a in mol.GetAtoms()]
-    except:
-        charges = [0]*mol.GetNumAtoms()
-
-    return {
-        "Mol": mol,
-        "Charges": charges,
-        "MW": Descriptors.MolWt(mol),
-        "LogP": Descriptors.MolLogP(mol),
-        "HBD": Descriptors.NumHDonors(mol),
-        "HBA": Descriptors.NumHAcceptors(mol),
-        "AromaticRings": rdMolDescriptors.CalcNumAromaticRings(mol),
-        "Rg": rdMolDescriptors.CalcRadiusOfGyration(mol)
-    }
+    return mol
 
 # -------------------------------
-# PHYSICS SCORING
+# INTERACTION FEATURES (CORE)
 # -------------------------------
-def electrostatic_score(lig, pocket):
-    mol = lig["Mol"]
+def compute_features(mol, rna_atoms):
+
+    lig_atoms = mol.GetAtoms()
     conf = mol.GetConformer()
-    charges = lig["Charges"]
 
-    score = 0
-    for i, atom in enumerate(mol.GetAtoms()):
+    contact = 0
+    elec = 0
+    hbond = 0
+    hb_count = 0
+    pi_stack = 0
+
+    pocket_coords = np.array([a.coord for a in rna_atoms])
+
+    for i, atom in enumerate(lig_atoms):
+
         pos = np.array(conf.GetAtomPosition(i))
-        qi = charges[i]
+        el_l = atom.GetSymbol()
 
-        for pa in pocket["Neg_Oxygens"]:
-            r = np.linalg.norm(pos - pa.coord)
-            if r < 8:
-                score += (qi * -0.5)/(r+0.5)
+        for ra in rna_atoms:
+            d = np.linalg.norm(pos - ra.coord)
 
-    return min(1.0, abs(score)/5.0)
+            if d > 8:
+                continue
 
-def hbond_score(lig, pocket):
-    mol = lig["Mol"]
-    conf = mol.GetConformer()
+            # Contact
+            if d < 5:
+                contact += 1
 
-    score = 0
-    for i, atom in enumerate(mol.GetAtoms()):
-        if atom.GetAtomicNum() in [7,8]:
-            pos = np.array(conf.GetAtomPosition(i))
-            for pa in pocket["Polar_Atoms"]:
-                d = np.linalg.norm(pos - pa.coord)
-                if d < 3.5:
-                    score += 1/(d+0.1)
+            # Electrostatic
+            elec += 1/(d**2 + 1)
 
-    return min(1.0, score/10)
+            # Hbond
+            if el_l in ["N","O"] and ra.element in ["N","O"] and d < 3.5:
+                hbond += 1/(d**2 + 0.5)
+                hb_count += 1
 
-def stacking_score(lig):
-    return min(1.0, lig["AromaticRings"]/5)
+            # Pi stacking (approx)
+            if el_l in ["C","N"] and ra.element in ["C","N"] and 3.0 < d < 4.5:
+                pi_stack += 1/(d**2)
 
-def shape_score(lig, pocket):
-    diff = abs(lig["Rg"] - pocket["Rg"])
-    return max(0, 1 - diff/(pocket["Rg"]+0.1))
+    ligand_size = max(len(lig_atoms),1)
+    contact_safe = max(contact,1)
 
-def curvature_score(pocket):
-    return 1 - pocket["Curvature"]
+    contact_density = contact / ligand_size
+    electrostatic_score = elec / contact_safe
+    hbond_strength = hbond / hb_count if hb_count>0 else 0
+    pi_stack = pi_stack / contact_safe
 
-def final_probability(lig, pocket):
-    e = electrostatic_score(lig, pocket)
-    h = hbond_score(lig, pocket)
-    s = stacking_score(lig)
-    sh = shape_score(lig, pocket)
-    c = curvature_score(pocket)
+    return contact_density, electrostatic_score, hbond_strength, pi_stack
 
-    prob = (0.30*e + 0.25*h + 0.20*s + 0.15*sh + 0.10*c)
-    return round(min(1.0, prob), 4)
+# -------------------------------
+# SCORING + PROBABILITY
+# -------------------------------
+def calculate_probability(features, depth, curvature):
+
+    cd, elec, hb, pi = features
+
+    score = (
+        WEIGHTS["Contact_density"] * cd +
+        WEIGHTS["Electrostatic_score"] * elec +
+        WEIGHTS["Hbond_strength"] * hb +
+        WEIGHTS["Pi_stacking"] * pi +
+        WEIGHTS["Pocket_depth_mean"] * depth +
+        WEIGHTS["Curvature"] * curvature
+    )
+
+    z = (score - MEAN) / STD if STD != 0 else 0
+    prob = 1/(1 + np.exp(-z))
+
+    return prob
 
 # -------------------------------
 # UI INPUT
@@ -152,7 +156,7 @@ structure_file = st.file_uploader("Upload RNA structure (PDB)", type=["pdb"])
 smiles_file = st.file_uploader("Upload SMILES (txt/csv)", type=["txt","csv"])
 
 # -------------------------------
-# RUN SCREENING
+# RUN VS
 # -------------------------------
 if st.button("🚀 Run Virtual Screening"):
 
@@ -169,7 +173,7 @@ if st.button("🚀 Run Virtual Screening"):
     structure = parser.get_structure("RNA", path)
 
     rna_atoms = extract_rna_atoms(structure)
-    pocket = compute_pocket_features(rna_atoms)
+    depth, curvature = compute_pocket_features(rna_atoms)
 
     # ---- load smiles ----
     if smiles_file.name.endswith(".csv"):
@@ -182,29 +186,30 @@ if st.button("🚀 Run Virtual Screening"):
 
     for i, smi in enumerate(smiles_list):
 
-        lig = ligand_features(smi)
-        if lig is None:
+        mol = generate_ligand(smi)
+        if mol is None:
             continue
 
-        prob = final_probability(lig, pocket)
+        feats = compute_features(mol, rna_atoms)
+        prob = calculate_probability(feats, depth, curvature)
 
         results.append({
             "Ligand_ID": f"Lig_{i+1}",
             "SMILES": smi,
-            "MW": lig["MW"],
-            "LogP": lig["LogP"],
-            "HBD": lig["HBD"],
-            "HBA": lig["HBA"],
-            "AromaticRings": lig["AromaticRings"],
-            "Rg": lig["Rg"],
-            "Probability": prob
+            "Contact_density": feats[0],
+            "Electrostatic_score": feats[1],
+            "Hbond_strength": feats[2],
+            "Pi_stacking": feats[3],
+            "Pocket_depth_mean": depth,
+            "Curvature": curvature,
+            "Probability": round(prob,4)
         })
 
     df = pd.DataFrame(results)
-    df = df.sort_values("Probability", ascending=False)
+    df = df.sort_values(by="Probability", ascending=False)
     df["Rank"] = range(1, len(df)+1)
 
-    st.success("✅ Screening Completed")
+    st.success("✅ Virtual Screening Completed")
 
     st.dataframe(df, use_container_width=True)
 
