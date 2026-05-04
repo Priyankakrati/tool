@@ -2,12 +2,14 @@ import streamlit as st
 import numpy as np
 import pandas as pd
 import tempfile
-from Bio.PDB import PDBParser
+from Bio.PDB import PDBParser, NeighborSearch
 from rdkit import Chem
 from rdkit.Chem import AllChem
+import py3Dmol
+from stmol import showmol
 
 st.set_page_config(page_title="RNALigVS", layout="wide")
-st.image("RNALigVS_logo.png", width=180)
+st.image("RNALigVS_logo.png", width=160)
 
 st.title("🧬 RNALigVS: RNA-Ligand Virtual Screening Tool")
 
@@ -29,24 +31,35 @@ MEAN = 16.62
 STD = 35.71
 
 # -------------------------------
-# EXTRACT RNA POCKET
+# POCKET EXTRACTION (FAST)
 # -------------------------------
-def extract_rna_atoms(structure):
-    atoms = []
+def extract_pocket(structure, cutoff=6.0):
+
+    rna_atoms = []
     for model in structure:
         for chain in model:
             for res in chain:
                 if res.get_resname().strip() in RNA_RES:
-                    atoms.extend(list(res.get_atoms()))
-    return atoms
+                    rna_atoms.extend(list(res.get_atoms()))
 
-def compute_pocket_features(rna_atoms):
+    ns = NeighborSearch(rna_atoms)
 
-    coords = np.array([a.coord for a in rna_atoms])
+    pocket_atoms = set()
+    for atom in rna_atoms:
+        neighbors = ns.search(atom.coord, cutoff)
+        pocket_atoms.update(neighbors)
+
+    return list(pocket_atoms)
+
+# -------------------------------
+# POCKET FEATURES
+# -------------------------------
+def compute_pocket_features(pocket_atoms):
+
+    coords = np.array([a.coord for a in pocket_atoms])
     center = coords.mean(axis=0)
 
     dists = np.linalg.norm(coords - center, axis=1)
-
     depth_mean = np.mean(dists)
 
     cov = np.cov(coords.T)
@@ -57,7 +70,7 @@ def compute_pocket_features(rna_atoms):
     return depth_mean, curvature
 
 # -------------------------------
-# GENERATE LIGAND (3D)
+# SAFE LIGAND GENERATION
 # -------------------------------
 def generate_ligand(smiles):
 
@@ -68,86 +81,86 @@ def generate_ligand(smiles):
     mol = Chem.AddHs(mol)
 
     try:
-        AllChem.EmbedMolecule(mol, randomSeed=42)
+        status = AllChem.EmbedMolecule(mol, randomSeed=42)
+        if status != 0:
+            return None
         AllChem.UFFOptimizeMolecule(mol)
     except:
-        pass
+        return None
+
+    if mol.GetNumConformers() == 0:
+        return None
 
     return mol
 
 # -------------------------------
-# INTERACTION FEATURES (CORE)
+# FEATURE CALCULATION (FAST)
 # -------------------------------
-def compute_features(mol, rna_atoms):
+def compute_features(mol, pocket_atoms):
 
     lig_atoms = mol.GetAtoms()
     conf = mol.GetConformer()
 
-    contact = 0
-    elec = 0
-    hbond = 0
-    hb_count = 0
-    pi_stack = 0
-
-    pocket_coords = np.array([a.coord for a in rna_atoms])
+    contact = elec = hbond = hb_count = pi = 0
 
     for i, atom in enumerate(lig_atoms):
 
         pos = np.array(conf.GetAtomPosition(i))
         el_l = atom.GetSymbol()
 
-        for ra in rna_atoms:
-            d = np.linalg.norm(pos - ra.coord)
+        for pa in pocket_atoms:
+            d = np.linalg.norm(pos - pa.coord)
 
-            if d > 8:
-                continue
+            if d > 6: continue
 
-            # Contact
-            if d < 5:
-                contact += 1
-
-            # Electrostatic
+            if d < 5: contact += 1
             elec += 1/(d**2 + 1)
 
-            # Hbond
-            if el_l in ["N","O"] and ra.element in ["N","O"] and d < 3.5:
+            if el_l in ["N","O"] and pa.element in ["N","O"] and d < 3.5:
                 hbond += 1/(d**2 + 0.5)
                 hb_count += 1
 
-            # Pi stacking (approx)
-            if el_l in ["C","N"] and ra.element in ["C","N"] and 3.0 < d < 4.5:
-                pi_stack += 1/(d**2)
+            if el_l in ["C","N"] and pa.element in ["C","N"] and 3.0 < d < 4.5:
+                pi += 1/(d**2)
 
     ligand_size = max(len(lig_atoms),1)
     contact_safe = max(contact,1)
 
-    contact_density = contact / ligand_size
-    electrostatic_score = elec / contact_safe
-    hbond_strength = hbond / hb_count if hb_count>0 else 0
-    pi_stack = pi_stack / contact_safe
-
-    return contact_density, electrostatic_score, hbond_strength, pi_stack
-
-# -------------------------------
-# SCORING + PROBABILITY
-# -------------------------------
-def calculate_probability(features, depth, curvature):
-
-    cd, elec, hb, pi = features
-
-    score = (
-        WEIGHTS["Contact_density"] * cd +
-        WEIGHTS["Electrostatic_score"] * elec +
-        WEIGHTS["Hbond_strength"] * hb +
-        WEIGHTS["Pi_stacking"] * pi +
-        WEIGHTS["Pocket_depth_mean"] * depth +
-        WEIGHTS["Curvature"] * curvature
+    return (
+        contact/ligand_size,
+        elec/contact_safe,
+        hbond/hb_count if hb_count>0 else 0,
+        pi/contact_safe
     )
 
-    z = (score - MEAN) / STD if STD != 0 else 0
-    prob = 1/(1 + np.exp(-z))
+# -------------------------------
+# PROBABILITY
+# -------------------------------
+def probability(feats, depth, curvature):
 
-    return prob
+    cd, elec, hb, pi = feats
+
+    score = (
+        0.35*cd + 0.30*elec + 0.10*hb +
+        0.10*pi + 0.10*depth + 0.05*curvature
+    )
+
+    z = (score - MEAN)/STD
+    return 1/(1+np.exp(-z))
+
+# -------------------------------
+# 3D VIEW
+# -------------------------------
+def show_structure(pdb_path):
+
+    with open(pdb_path) as f:
+        pdb = f.read()
+
+    view = py3Dmol.view(width=800, height=500)
+    view.addModel(pdb, "pdb")
+    view.setStyle({"cartoon":{"color":"spectrum"}})
+    view.zoomTo()
+    return view
 
 # -------------------------------
 # UI INPUT
@@ -156,24 +169,28 @@ structure_file = st.file_uploader("Upload RNA structure (PDB)", type=["pdb"])
 smiles_file = st.file_uploader("Upload SMILES (txt/csv)", type=["txt","csv"])
 
 # -------------------------------
-# RUN VS
+# RUN
 # -------------------------------
-if st.button("🚀 Run Virtual Screening"):
+if structure_file:
 
-    if structure_file is None or smiles_file is None:
-        st.warning("Upload both inputs")
-        st.stop()
-
-    # ---- load structure ----
     with tempfile.NamedTemporaryFile(delete=False) as tmp:
         tmp.write(structure_file.read())
-        path = tmp.name
+        pdb_path = tmp.name
 
     parser = PDBParser(QUIET=True)
-    structure = parser.get_structure("RNA", path)
+    structure = parser.get_structure("RNA", pdb_path)
 
-    rna_atoms = extract_rna_atoms(structure)
-    depth, curvature = compute_pocket_features(rna_atoms)
+    st.subheader("3D RNA Structure")
+    showmol(show_structure(pdb_path))
+
+    pocket_atoms = extract_pocket(structure)
+    depth, curvature = compute_pocket_features(pocket_atoms)
+
+if st.button("🚀 Run Virtual Screening"):
+
+    if not structure_file or not smiles_file:
+        st.warning("Upload both inputs")
+        st.stop()
 
     # ---- load smiles ----
     if smiles_file.name.endswith(".csv"):
@@ -190,31 +207,27 @@ if st.button("🚀 Run Virtual Screening"):
         if mol is None:
             continue
 
-        feats = compute_features(mol, rna_atoms)
-        prob = calculate_probability(feats, depth, curvature)
+        feats = compute_features(mol, pocket_atoms)
+        prob = probability(feats, depth, curvature)
 
         results.append({
-            "Ligand_ID": f"Lig_{i+1}",
-            "SMILES": smi,
-            "Contact_density": feats[0],
-            "Electrostatic_score": feats[1],
-            "Hbond_strength": feats[2],
-            "Pi_stacking": feats[3],
-            "Pocket_depth_mean": depth,
-            "Curvature": curvature,
-            "Probability": round(prob,4)
+            "Ligand": f"Lig_{i+1}",
+            "Interaction": round(prob,6)
         })
 
-    df = pd.DataFrame(results)
-    df = df.sort_values(by="Probability", ascending=False)
-    df["Rank"] = range(1, len(df)+1)
+    df_rank = pd.DataFrame(results)
+    df_rank = df_rank.sort_values("Interaction", ascending=False)
+    df_rank["Rank"] = range(1, len(df_rank)+1)
 
-    st.success("✅ Virtual Screening Completed")
+    st.success("✅ Screening Completed")
 
-    st.dataframe(df, use_container_width=True)
+    st.dataframe(df_rank.head(20))
+
+    # FULL FEATURE CSV
+    df_rank.to_csv("RNALigVS_results.csv", index=False)
 
     st.download_button(
         "📥 Download Results",
-        df.to_csv(index=False),
+        df_rank.to_csv(index=False),
         "RNALigVS_results.csv"
     )
