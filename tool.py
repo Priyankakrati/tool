@@ -363,7 +363,7 @@ elif page == "🚀 Run Prediction":
         smiles_list = [
             s.strip()
             for s in smiles_list
-             if s.strip()
+            if s.strip()
         ]
 
         progress = st.progress(0)
