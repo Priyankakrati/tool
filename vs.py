@@ -16,7 +16,7 @@ import py3Dmol
 # =========================================================
 st.set_page_config(
     page_title="RNALigVS",
-    page_icon="🧬",
+    page_icon=" ",
     layout="wide"
 )
 
@@ -76,9 +76,9 @@ RNA–Ligand Virtual Screening Platform
 page = st.sidebar.radio(
     "Navigation",
     [
-        "🏠 Home",
-        "🚀 Run Prediction",
-        "📘 Tutorial"
+        "Home",
+        "Run Prediction",
+        "Tutorial"
     ]
 )
 
@@ -297,7 +297,7 @@ def show_rna_structure(pdb_path, pocket_coords):
 # =========================================================
 # HOME PAGE
 # =========================================================
-if page == "🏠 Home":
+if page == "Home":
 
     st.image(
         "RNALigVS_logo.png",
@@ -366,7 +366,7 @@ if page == "🏠 Home":
 # =========================================================
 # RUN PREDICTION
 # =========================================================
-elif page == "🚀 Run Prediction":
+elif page == "Run Prediction":
 
     st.image(
         "RNALigVS_logo.png",
@@ -416,7 +416,7 @@ elif page == "🚀 Run Prediction":
     # =====================================================
     # SCREENING
     # =====================================================
-    if st.button("🚀 Run Virtual Screening"):
+    if st.button("Run Virtual Screening"):
 
         if structure_file is None or smiles_file is None:
 
@@ -520,7 +520,7 @@ elif page == "🚀 Run Prediction":
         df_feat = pd.DataFrame(feature_rows)
 
         st.success(
-            "✅ Virtual Screening Completed"
+            "Virtual Screening Completed"
         )
 
         # =================================================
@@ -613,7 +613,7 @@ elif page == "🚀 Run Prediction":
         # FEATURE DESCRIPTION
         # =================================================
         with st.expander(
-            "📘 Feature Description"
+            "Feature Description"
         ):
 
             st.markdown("""
@@ -640,13 +640,13 @@ elif page == "🚀 Run Prediction":
         # DOWNLOADS
         # =================================================
         st.download_button(
-            "📥 Download Ranking CSV",
+            "Download Ranking CSV",
             df_rank.to_csv(index=False),
             "RNALigVS_ranking.csv"
         )
 
         st.download_button(
-            "📥 Download Feature CSV",
+            "Download Feature CSV",
             df_feat.to_csv(index=False),
             "RNALigVS_features.csv"
         )
@@ -654,9 +654,9 @@ elif page == "🚀 Run Prediction":
 # =========================================================
 # TUTORIAL
 # =========================================================
-elif page == "📘 Tutorial":
+elif page == "Tutorial":
 
-    st.title("📘 RNALigVS Tutorial")
+    st.title("RNALigVS Tutorial")
 
     st.markdown("""
     ## Step 1 — Upload RNA Structure
