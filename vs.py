@@ -7,7 +7,11 @@ import tempfile
 from Bio.PDB import PDBParser
 
 from rdkit import Chem
-from rdkit.Chem import AllChem
+from rdkit.Chem import (
+    Descriptors,
+    Lipinski,
+    rdMolDescriptors
+)
 
 import py3Dmol
 
@@ -16,7 +20,7 @@ import py3Dmol
 # =========================================================
 st.set_page_config(
     page_title="RNALigVS",
-    page_icon=" ",
+    page_icon="🧬",
     layout="wide"
 )
 
@@ -65,7 +69,10 @@ h1, h2, h3 {
 # =========================================================
 # SIDEBAR
 # =========================================================
-st.sidebar.image("RNALigVS_logo.png", width=130)
+st.sidebar.image(
+    "RNALigVS_logo.png",
+    width=130
+)
 
 st.sidebar.markdown("""
 # RNALigVS
@@ -76,9 +83,9 @@ RNA–Ligand Virtual Screening Platform
 page = st.sidebar.radio(
     "Navigation",
     [
-        "Home",
-        "Run Prediction",
-        "Tutorial"
+        "🏠 Home",
+        "🚀 Run Prediction",
+        "📘 Tutorial"
     ]
 )
 
@@ -87,26 +94,19 @@ page = st.sidebar.radio(
 # =========================================================
 RNA_RES = {"A", "C", "G", "U"}
 
-WEIGHTS = {
-    "Contact_density": 0.35,
-    "Electrostatic_score": 0.30,
-    "Hbond_strength": 0.10,
-    "Pi_stacking": 0.10,
-    "Pocket_depth_mean": 0.10,
-    "Curvature": 0.05
-}
-
-MEAN = 16.62
-STD = 35.71
-
 # =========================================================
-# FUNCTIONS
+# RNA POCKET EXTRACTION
 # =========================================================
 @st.cache_data
 def extract_rna_pocket(pdb_bytes):
 
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdb") as tmp:
+    with tempfile.NamedTemporaryFile(
+        delete=False,
+        suffix=".pdb"
+    ) as tmp:
+
         tmp.write(pdb_bytes)
+
         pdb_path = tmp.name
 
     parser = PDBParser(QUIET=True)
@@ -119,12 +119,15 @@ def extract_rna_pocket(pdb_bytes):
     coords = []
 
     for model in structure:
+
         for chain in model:
+
             for res in chain:
 
                 if res.get_resname().strip() in RNA_RES:
 
                     for atom in res:
+
                         coords.append(atom.coord)
 
     coords = np.array(coords)
@@ -138,127 +141,50 @@ def extract_rna_pocket(pdb_bytes):
 
     depth = np.mean(dists)
 
-    cov = np.cov(coords.T)
+    return coords, depth, pdb_path
 
-    eig = np.linalg.eigvals(cov)
-
-    eig = sorted(np.real(eig))
-
-    curvature = eig[0] / eig[-1] if eig[-1] != 0 else 0
-
-    return coords, depth, curvature, pdb_path
-
-
-def generate_ligand(smiles):
+# =========================================================
+# FAST DESCRIPTOR FEATURES
+# =========================================================
+@st.cache_data
+def compute_fast_features(smiles):
 
     mol = Chem.MolFromSmiles(smiles)
 
     if mol is None:
         return None
 
-    mol = Chem.AddHs(mol)
+    mw = Descriptors.MolWt(mol)
 
-    try:
+    logp = Descriptors.MolLogP(mol)
 
-        if AllChem.EmbedMolecule(
-            mol,
-            randomSeed=42,
-            useRandomCoords=True
-        ) != 0:
+    hbd = Lipinski.NumHDonors(mol)
 
-            return None
+    hba = Lipinski.NumHAcceptors(mol)
 
-    except:
-        return None
+    aromatic = rdMolDescriptors.CalcNumAromaticRings(mol)
 
-    return mol
+    rot = Lipinski.NumRotatableBonds(mol)
 
+    tpsa = rdMolDescriptors.CalcTPSA(mol)
 
-def compute_features_fast(mol, pocket_coords):
+    return {
+        "MW": mw,
+        "LogP": logp,
+        "HBD": hbd,
+        "HBA": hba,
+        "Aromatic": aromatic,
+        "RotBonds": rot,
+        "TPSA": tpsa
+    }
 
-    conf = mol.GetConformer()
-
-    lig_coords = np.array([
-        list(conf.GetAtomPosition(i))
-        for i in range(mol.GetNumAtoms())
-    ])
-
-    dists = np.linalg.norm(
-        lig_coords[:, None, :] -
-        pocket_coords[None, :, :],
-        axis=2
-    )
-
-    contact = np.sum(dists < 5)
-
-    ligand_size = max(len(lig_coords), 1)
-
-    contact_density = contact / ligand_size
-
-    elec = np.sum(
-        1 / (dists**2 + 1)
-    )
-
-    electrostatic_score = elec / max(contact, 1)
-
-    hb_mask = dists < 3.5
-
-    if np.any(hb_mask):
-
-        hbond = np.sum(
-            1 / (dists[hb_mask]**2 + 0.5)
-        )
-
-        hbond_strength = hbond / np.sum(hb_mask)
-
-    else:
-        hbond_strength = 0
-
-    pi_mask = (
-        (dists > 3.0) &
-        (dists < 4.5)
-    )
-
-    if np.any(pi_mask):
-
-        pi = np.sum(
-            1 / (dists[pi_mask]**2)
-        )
-
-        pi_stack = pi / max(contact, 1)
-
-    else:
-        pi_stack = 0
-
-    return (
-        contact_density,
-        electrostatic_score,
-        hbond_strength,
-        pi_stack
-    )
-
-
-def calculate_probability(features, depth, curvature):
-
-    cd, elec, hb, pi = features
-
-    score = (
-        WEIGHTS["Contact_density"] * cd +
-        WEIGHTS["Electrostatic_score"] * elec +
-        WEIGHTS["Hbond_strength"] * hb +
-        WEIGHTS["Pi_stacking"] * pi +
-        WEIGHTS["Pocket_depth_mean"] * depth +
-        WEIGHTS["Curvature"] * curvature
-    )
-
-    z = (score - MEAN) / STD
-
-    return 1 / (1 + np.exp(-z))
-
-
+# =========================================================
+# RNA STRUCTURE VISUALIZATION
+# =========================================================
 def show_rna_structure(pdb_path, pocket_coords):
 
     with open(pdb_path) as f:
+
         pdb_data = f.read()
 
     view = py3Dmol.view(
@@ -277,6 +203,7 @@ def show_rna_structure(pdb_path, pocket_coords):
         }
     })
 
+    # HIGHLIGHT POCKET
     for c in pocket_coords[:300]:
 
         view.addSphere({
@@ -297,7 +224,7 @@ def show_rna_structure(pdb_path, pocket_coords):
 # =========================================================
 # HOME PAGE
 # =========================================================
-if page == "Home":
+if page == "🏠 Home":
 
     st.image(
         "RNALigVS_logo.png",
@@ -341,19 +268,18 @@ if page == "Home":
     st.markdown("""
     ## 🔬 About RNALigVS
 
-    RNALigVS is a fast structure-based virtual screening
-    platform for predicting RNA–ligand interaction likelihood
-    using physics-inspired interaction features.
+    RNALigVS is a lightweight and fast RNA-focused
+    virtual screening platform for identifying
+    potential RNA-binding ligands using
+    descriptor-driven scoring.
 
     ## ⚡ Features
 
     - RNA pocket visualization
-    - Fast ligand screening
-    - Contact density scoring
-    - Electrostatic interaction scoring
-    - Hydrogen bonding estimation
-    - π-stacking interaction analysis
-    - Downloadable CSV results
+    - Fast descriptor-based screening
+    - Probability scoring
+    - CSV export
+    - Publication-ready interface
 
     ## 🧪 Workflow
 
@@ -366,7 +292,7 @@ if page == "Home":
 # =========================================================
 # RUN PREDICTION
 # =========================================================
-elif page == "Run Prediction":
+elif page == "🚀 Run Prediction":
 
     st.image(
         "RNALigVS_logo.png",
@@ -388,13 +314,13 @@ elif page == "Run Prediction":
     )
 
     # =====================================================
-    # RNA STRUCTURE
+    # RNA VISUALIZATION
     # =====================================================
     if structure_file:
 
         pdb_bytes = structure_file.read()
 
-        pocket_coords, depth, curvature, pdb_path = (
+        pocket_coords, depth, pdb_path = (
             extract_rna_pocket(pdb_bytes)
         )
 
@@ -416,7 +342,7 @@ elif page == "Run Prediction":
     # =====================================================
     # SCREENING
     # =====================================================
-    if st.button("Run Virtual Screening"):
+    if st.button("🚀 Run Virtual Screening"):
 
         if structure_file is None or smiles_file is None:
 
@@ -456,46 +382,61 @@ elif page == "Run Prediction":
         progress = st.progress(0)
 
         results = []
-        feature_rows = []
 
+        # =================================================
+        # FAST SCREENING LOOP
+        # =================================================
         with st.spinner(
-            "Running virtual screening..."
+            "Running ultra-fast virtual screening..."
         ):
 
             for idx, smi in enumerate(smiles_list):
 
-                mol = generate_ligand(smi)
+                feats = compute_fast_features(smi)
 
-                if mol is None:
+                if feats is None:
                     continue
 
-                feats = compute_features_fast(
-                    mol,
-                    pocket_coords
+                # FAST APPROXIMATE SCORING
+                score = (
+                    0.30 * feats["Aromatic"] +
+                    0.20 * feats["HBD"] +
+                    0.20 * feats["HBA"] +
+                    0.10 * feats["RotBonds"] +
+                    0.10 * abs(feats["LogP"]) +
+                    0.10 * depth
                 )
 
-                prob = calculate_probability(
-                    feats,
-                    depth,
-                    curvature
+                prob = 1 / (
+                    1 + np.exp(-score / 10)
                 )
 
                 results.append({
                     "Ligand": f"Lig_{idx+1}",
                     "SMILES": smi,
-                    "Binding Probability": round(prob, 6)
-                })
+                    "MolecularWeight":
+                        round(feats["MW"], 2),
 
-                feature_rows.append({
-                    "Ligand": f"Lig_{idx+1}",
-                    "SMILES": smi,
-                    "Contact_density": round(feats[0], 4),
-                    "Electrostatic_score": round(feats[1], 4),
-                    "Hbond_strength": round(feats[2], 4),
-                    "Pi_stacking": round(feats[3], 4),
-                    "Pocket_depth_mean": round(depth, 4),
-                    "Curvature": round(curvature, 4),
-                    "Probability": round(prob, 6)
+                    "LogP":
+                        round(feats["LogP"], 2),
+
+                    "HBD":
+                        feats["HBD"],
+
+                    "HBA":
+                        feats["HBA"],
+
+                    "TPSA":
+                        round(feats["TPSA"], 2),
+
+                    "AromaticRings":
+                        feats["Aromatic"],
+
+                    "RotatableBonds":
+                        feats["RotBonds"],
+
+                    "Binding Probability":
+                        round(prob, 6)
                 })
 
                 progress.progress(
@@ -517,14 +458,12 @@ elif page == "Run Prediction":
             len(df_rank) + 1
         )
 
-        df_feat = pd.DataFrame(feature_rows)
-
         st.success(
-            "Virtual Screening Completed"
+            "✅ Virtual Screening Completed"
         )
 
         # =================================================
-        # STATS
+        # TOP HIT
         # =================================================
         top_hit = df_rank.iloc[0]
 
@@ -537,6 +476,9 @@ elif page == "Run Prediction":
             """
         )
 
+        # =================================================
+        # STATS
+        # =================================================
         c1, c2, c3 = st.columns(3)
 
         with c1:
@@ -570,7 +512,9 @@ elif page == "Run Prediction":
         # =================================================
         # TABLE
         # =================================================
-        st.subheader("Top Hits")
+        st.subheader(
+            "Top Hits"
+        )
 
         st.dataframe(
             df_rank.head(20),
@@ -613,50 +557,44 @@ elif page == "Run Prediction":
         # FEATURE DESCRIPTION
         # =================================================
         with st.expander(
-            "Feature Description"
+            "📘 Feature Description"
         ):
 
             st.markdown("""
-            ### Contact Density
-            Number of ligand–RNA contacts normalized by ligand size.
+            ### Molecular Weight
+            Total molecular mass of ligand.
 
-            ### Electrostatic Score
-            Distance-based electrostatic interaction approximation.
+            ### LogP
+            Lipophilicity descriptor.
 
-            ### H-bond Strength
-            Estimated hydrogen bond contribution.
+            ### HBD / HBA
+            Hydrogen bond donors and acceptors.
 
-            ### π-Stacking
-            Aromatic interaction scoring.
+            ### TPSA
+            Topological polar surface area.
 
-            ### Pocket Depth
-            Geometric pocket compactness descriptor.
+            ### Aromatic Rings
+            Aromatic interaction potential.
 
-            ### Curvature
-            Shape-based RNA pocket descriptor.
+            ### Rotatable Bonds
+            Ligand flexibility descriptor.
             """)
 
         # =================================================
         # DOWNLOADS
         # =================================================
         st.download_button(
-            "Download Ranking CSV",
+            "📥 Download Results CSV",
             df_rank.to_csv(index=False),
-            "RNALigVS_ranking.csv"
-        )
-
-        st.download_button(
-            "Download Feature CSV",
-            df_feat.to_csv(index=False),
-            "RNALigVS_features.csv"
+            "RNALigVS_results.csv"
         )
 
 # =========================================================
-# TUTORIAL
+# TUTORIAL PAGE
 # =========================================================
-elif page == "Tutorial":
+elif page == "📘 Tutorial":
 
-    st.title("RNALigVS Tutorial")
+    st.title("📘 RNALigVS Tutorial")
 
     st.markdown("""
     ## Step 1 — Upload RNA Structure
@@ -672,7 +610,7 @@ elif page == "Tutorial":
 
     ## Output Files
     - Ranked ligand CSV
-    - Full feature CSV
+    - Descriptor dataset
 
     ## Interpretation
     Higher probability indicates stronger predicted RNA–ligand interaction likelihood.
