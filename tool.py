@@ -808,29 +808,34 @@ elif page == "Run Prediction":
             view._make_html(),
             height=700
         )
+
+    pocket_atoms = st.session_state["pocket_atoms"]
+    phosphate_atoms = st.session_state["phosphate_atoms"]
+    oxygen_atoms = st.session_state["oxygen_atoms"]
+
     c1, c2, c3 = st.columns(3)
 
-with c1:
+    with c1:
 
-    st.metric(
-        "Pocket Atoms",
-        len(pocket_atoms)
-    )
+        st.metric(
+            "Pocket Atoms",
+            len(pocket_atoms)
+        )
 
-with c2:
+    with c2:
 
-    st.metric(
-        "Phosphate Atoms",
-        len(phosphate_atoms)
-    )
+        st.metric(
+            "Phosphate Atoms",
+            len(phosphate_atoms)
+        )
 
-with c3:
+    with c3:
 
-    st.metric(
-        "Oxygen Atoms",
-        len(oxygen_atoms)
-    )
-       
+        st.metric(
+            "Oxygen Atoms",
+            len(oxygen_atoms)
+        )
+        
 
     # =====================================================
     # RUN SCREENING
