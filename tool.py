@@ -22,7 +22,6 @@ from Bio.PDB import (
     NeighborSearch
 )
 
-from utils_scientific import visualize_pocket
 from utils_scientific import pocket_residue_table
 from utils_scientific import pocket_geometry
 from utils_scientific import confidence_label
@@ -887,223 +886,143 @@ elif page == "Run Prediction":
             progress.progress(
                 (idx + 1) / total
             )
-# =================================================
-# SAVE RESULTS AFTER SCREENING
-# =================================================
 
-if len(results) == 0:
+        # =================================================
+        # RESULTS
+        # =================================================
 
-    st.error(
-        "No valid ligands processed!"
-    )
+        if len(results) == 0:
 
-else:
+            st.error(
+                "No valid ligands processed!"
+            )
 
-    result_df = pd.DataFrame(results)
+        else:
 
-    # SORT
-    result_df = result_df.sort_values(
+            result_df = pd.DataFrame(results)
 
-        "Interaction Probability",
+            result_df = result_df.sort_values(
 
-        ascending=False
-    )
+                "Interaction Probability",
 
-    # ADD RANK
-    result_df["Rank"] = range(
-        1,
-        len(result_df) + 1
-    )
+                ascending=False
+            )
 
-    # =============================================
-    # STORE RESULTS IN SESSION
-    # =============================================
+            result_df["Rank"] = range(
+                1,
+                len(result_df) + 1
+            )
 
-    st.session_state["result_df"] = result_df
+            st.success(
+                "Virtual screening completed!"
+            )
 
-    st.session_state["screening_complete"] = True
+            st.subheader(
+                "Predicted Ligands"
+            )
 
-    st.session_state["pdb_path"] = pdb_path
+            st.dataframe(
+                result_df,
+                use_container_width=True
+            )
 
-    st.session_state["pocket_coords"] = pocket_coords
+            # =============================================
+            # DOWNLOAD
+            # =============================================
 
-    st.session_state["phosphate_atoms"] = phosphate_atoms
+            csv = result_df.to_csv(
+                index=False
+            ).encode("utf-8")
 
-    st.session_state["oxygen_atoms"] = oxygen_atoms
+            st.download_button(
 
+                label="Download Results CSV",
 
-# =====================================================
-# DISPLAY SAVED RESULTS
-# =====================================================
+                data=csv,
 
-if st.session_state.get(
-    "screening_complete",
-    False
-):
+                file_name=
+                "RNALigVS_results.csv",
 
-    result_df = st.session_state[
-        "result_df"
-    ]
+                mime="text/csv"
+            )
 
-    st.success(
-        "Virtual screening completed!"
-    )
+            # =============================================
+            # LIGAND ANALYSIS
+            # =============================================
 
-    # =================================================
-    # FILTER
-    # =================================================
+            st.subheader(
+                "Ligand Analysis"
+            )
 
-    min_prob = st.slider(
+            selected_smiles = st.selectbox(
+                "Select SMILES",
+                result_df["SMILES"]
+            )
 
-        "Minimum Interaction Probability",
+            lip = lipinski(
+                selected_smiles
+            )
 
-        0.0,
+            col1, col2 = st.columns([1,1])
 
-        1.0,
+            with col1:
 
-        0.5,
+                st.subheader(
+                    "Selected SMILES"
+                )
 
-        0.01,
+                st.code(
+                    selected_smiles
+                )
 
-        key="prob_filter"
-    )
+            with col2:
 
-    filtered_df = result_df[
+                st.subheader(
+                    "Lipinski's Rule"
+                )
 
-        result_df[
-            "Interaction Probability"
-        ] >= min_prob
-    ]
+                lip_df = pd.DataFrame(
+                    [lip]
+                )
 
-    st.subheader(
-        "Predicted Ligands"
-    )
+                st.dataframe(
+                    lip_df,
+                    use_container_width=True
+                )
 
-    st.dataframe(
-        filtered_df,
-        use_container_width=True
-    )
+# =========================================================
+# TUTORIAL PAGE
+# =========================================================
 
-    # =================================================
-    # DOWNLOAD
-    # =================================================
+elif page == "Tutorial":
 
-    csv = filtered_df.to_csv(
-        index=False
-    ).encode("utf-8")
+    st.header("RNALigVS Tutorial")
 
-    st.download_button(
+    st.markdown("""
 
-        label="Download Results CSV",
+    ### Step 1
+    Upload RNA structure in PDB format.
 
-        data=csv,
+    ### Step 2
+    Upload ligand library in TXT/CSV format.
 
-        file_name="RNALigVS_results.csv",
+    ### Step 3
+    RNALigVS computes:
+    - Contact Density
+    - Electrostatic Score
+    - Hbond Strength
+    - π-stacking energy
+    - Pocket depth
+    - Curvature
 
-        mime="text/csv"
-    )
+    ### Step 4
+    Final interaction probability is generated.
 
-    # =================================================
-    # SELECT SMILES
-    # =================================================
+    ### Output
+    - Ranked ligands
+    - RNALigVS score
+    - Interaction probability
+    - RNA pocket visualization
+    - Lipinski analysis
 
-    smiles_options = filtered_df[
-        "SMILES"
-    ].tolist()
-
-    if len(smiles_options) > 0:
-
-        selected_smiles = st.selectbox(
-
-            "Select SMILES",
-
-            smiles_options,
-
-            key="selected_smiles"
-        )
-
-        # =============================================
-        # SHOW SELECTED SMILES
-        # =============================================
-
-        st.subheader(
-            "Selected SMILES"
-        )
-
-        st.code(selected_smiles)
-
-        # =============================================
-        # LIPINSKI
-        # =============================================
-
-        lip = lipinski(
-            selected_smiles
-        )
-
-        st.subheader(
-            "Lipinski's Rule"
-        )
-
-        st.dataframe(
-            pd.DataFrame([lip]),
-            use_container_width=True
-        )
-
-        # =============================================
-        # INTERACTION PROFILE
-        # =============================================
-
-        selected_row = filtered_df[
-
-            filtered_df["SMILES"]
-            ==
-            selected_smiles
-
-        ].iloc[0]
-
-        interaction_features = {
-
-            "Contact Density":
-                selected_row["Contact Density"],
-
-            "Electrostatic Score":
-                selected_row["Electrostatic Score"],
-
-            "Hbond Strength":
-                selected_row["Hbond Strength"],
-
-            "Pi-stacking energy":
-                selected_row["Pi-stacking energy"]
-        }
-
-        interaction_df = interaction_summary(
-            interaction_features
-        )
-
-        st.subheader(
-            "RNA–Ligand Interaction Profile"
-        )
-
-        st.dataframe(
-            interaction_df,
-            use_container_width=True
-        )
-
-        # =============================================
-        # CONFIDENCE
-        # =============================================
-
-        conf = confidence_label(
-
-            selected_row[
-                "Interaction Probability"
-            ]
-        )
-
-        st.subheader(
-            "Prediction Confidence"
-        )
-
-        st.info(
-            f"{conf} Confidence Interaction"
-        )
+    """)
