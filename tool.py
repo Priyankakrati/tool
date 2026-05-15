@@ -888,7 +888,7 @@ elif page == "Run Prediction":
                 (idx + 1) / total
             )
 # =================================================
-# RESULTS
+# SAVE RESULTS AFTER SCREENING
 # =================================================
 
 if len(results) == 0:
@@ -901,6 +901,7 @@ else:
 
     result_df = pd.DataFrame(results)
 
+    # SORT
     result_df = result_df.sort_values(
 
         "Interaction Probability",
@@ -908,13 +909,14 @@ else:
         ascending=False
     )
 
+    # ADD RANK
     result_df["Rank"] = range(
         1,
         len(result_df) + 1
     )
 
     # =============================================
-    # SAVE RESULTS IN SESSION
+    # STORE RESULTS IN SESSION
     # =============================================
 
     st.session_state["result_df"] = result_df
@@ -1002,30 +1004,14 @@ if st.session_state.get(
     )
 
     # =================================================
-    # SELECT LIGAND
+    # SELECT SMILES
     # =================================================
-
-    st.subheader(
-        "Ligand Analysis"
-    )
 
     smiles_options = filtered_df[
         "SMILES"
     ].tolist()
 
-    if len(smiles_options) == 0:
-
-        st.warning(
-            "No ligands above selected probability threshold."
-        )
-
-    else:
-
-        if "selected_smiles" not in st.session_state:
-
-            st.session_state[
-                "selected_smiles"
-            ] = smiles_options[0]
+    if len(smiles_options) > 0:
 
         selected_smiles = st.selectbox(
 
@@ -1033,22 +1019,18 @@ if st.session_state.get(
 
             smiles_options,
 
-            index=smiles_options.index(
-
-                st.session_state[
-                    "selected_smiles"
-                ]
-
-            ) if st.session_state[
-                "selected_smiles"
-            ] in smiles_options else 0,
-
-            key="smiles_selector"
+            key="selected_smiles"
         )
 
-        st.session_state[
-            "selected_smiles"
-        ] = selected_smiles
+        # =============================================
+        # SHOW SELECTED SMILES
+        # =============================================
+
+        st.subheader(
+            "Selected SMILES"
+        )
+
+        st.code(selected_smiles)
 
         # =============================================
         # LIPINSKI
@@ -1058,32 +1040,14 @@ if st.session_state.get(
             selected_smiles
         )
 
-        col1, col2 = st.columns([1,1])
+        st.subheader(
+            "Lipinski's Rule"
+        )
 
-        with col1:
-
-            st.subheader(
-                "Selected SMILES"
-            )
-
-            st.code(
-                selected_smiles
-            )
-
-        with col2:
-
-            st.subheader(
-                "Lipinski's Rule"
-            )
-
-            lip_df = pd.DataFrame(
-                [lip]
-            )
-
-            st.dataframe(
-                lip_df,
-                use_container_width=True
-            )
+        st.dataframe(
+            pd.DataFrame([lip]),
+            use_container_width=True
+        )
 
         # =============================================
         # INTERACTION PROFILE
