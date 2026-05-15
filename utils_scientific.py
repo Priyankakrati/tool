@@ -1,3 +1,7 @@
+# =========================================================
+# RNALigVS SCIENTIFIC UTILITIES
+# =========================================================
+
 import numpy as np
 import pandas as pd
 
@@ -61,14 +65,18 @@ def pocket_geometry(coords):
 
     hull = ConvexHull(coords)
 
+    volume = hull.volume
+
+    area = hull.area
+
     return (
-        round(hull.volume, 2),
-        round(hull.area, 2)
+        round(volume, 2),
+        round(area, 2)
     )
 
 
 # =========================================================
-# CONFIDENCE
+# CONFIDENCE LABEL
 # =========================================================
 
 def confidence_label(prob):
@@ -166,10 +174,10 @@ def drug_likeness(smiles):
         "LogP":
             round(logp, 2),
 
-        "HBD":
+        "H-bond Donors":
             hbd,
 
-        "HBA":
+        "H-bond Acceptors":
             hba,
 
         "Rotatable Bonds":
@@ -203,12 +211,9 @@ def tanimoto(sm1, sm2):
         2
     )
 
-    return round(
-
-        DataStructs.TanimotoSimilarity(
-            fp1,
-            fp2
-        ),
-
-        3
+    similarity = DataStructs.TanimotoSimilarity(
+        fp1,
+        fp2
     )
+
+    return round(similarity, 3)
