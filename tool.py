@@ -22,6 +22,7 @@ from Bio.PDB import (
     NeighborSearch
 )
 
+from utils_scientific import visualize_pocket
 from utils_scientific import pocket_residue_table
 from utils_scientific import pocket_geometry
 from utils_scientific import confidence_label
