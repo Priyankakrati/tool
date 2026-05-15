@@ -1,6 +1,6 @@
 # =========================================================
 # RNALigVS FINAL STREAMLIT SERVER
-# COMPLETE FINAL CODE
+# COMPLETE FINAL SCIENTIFIC VERSION
 # =========================================================
 
 import os
@@ -50,18 +50,18 @@ h1, h2, h3 {
 
 .metric-box {
     background-color: white;
-    padding: 20px;
-    border-radius: 15px;
+    padding: 25px;
+    border-radius: 18px;
     text-align: center;
-    box-shadow: 0px 2px 8px rgba(0,0,0,0.08);
+    box-shadow: 0px 2px 10px rgba(0,0,0,0.08);
 }
 
 .feature-card {
     background-color: white;
-    padding: 20px;
-    border-radius: 15px;
-    margin-bottom: 15px;
-    box-shadow: 0px 2px 8px rgba(0,0,0,0.08);
+    padding: 25px;
+    border-radius: 18px;
+    margin-bottom: 20px;
+    box-shadow: 0px 2px 10px rgba(0,0,0,0.08);
 }
 
 .stButton>button {
@@ -82,10 +82,6 @@ h1, h2, h3 {
 # =========================================================
 
 RNA_RES = {"A", "C", "G", "U"}
-
-IGNORE = {"HOH", "WAT"}
-
-IONS = {"NA", "K", "MG", "CA", "ZN"}
 
 # =========================================================
 # SIDEBAR
@@ -199,7 +195,7 @@ def compute_features(
     formal_charge = Chem.GetFormalCharge(mol)
 
     # =====================================================
-    # RNA POCKET DESCRIPTORS
+    # POCKET DESCRIPTORS
     # =====================================================
 
     pocket_size = len(pocket_atoms)
@@ -396,13 +392,44 @@ def show_structure(
 
 if page == "🏠 Home":
 
-    st.title("RNALigVS")
+    col1, col2 = st.columns([1,3])
 
-    st.subheader(
-        "RNA–Ligand Virtual Screening Platform"
-    )
+    with col1:
+
+        if os.path.exists(logo_path):
+
+            st.image(
+                logo_path,
+                width=220
+            )
+
+    with col2:
+
+        st.markdown("""
+        <h1 style='color:#0B3C74;'>
+        RNALigVS
+        </h1>
+        """, unsafe_allow_html=True)
+
+        st.markdown("""
+        <h3 style='color:#4c5d73;'>
+        RNA–Ligand Virtual Screening Platform
+        </h3>
+        """, unsafe_allow_html=True)
+
+        st.markdown("""
+        RNALigVS is a docking-free, physics-informed virtual screening framework
+        developed for rapid identification of RNA-targeting small molecules.
+        The platform integrates RNA structural information with ligand
+        physicochemical descriptors to estimate RNA–ligand interaction
+        probability using an interpretable weighted scoring function.
+        """)
 
     st.divider()
+
+    # =====================================================
+    # METRICS
+    # =====================================================
 
     c1, c2, c3 = st.columns(3)
 
@@ -410,8 +437,11 @@ if page == "🏠 Home":
 
         st.markdown("""
         <div class='metric-box'>
-        <h5>Screening Type</h5>
+
+        <h5>Screening Strategy</h5>
+
         <h2>Docking-Free</h2>
+
         </div>
         """, unsafe_allow_html=True)
 
@@ -419,8 +449,11 @@ if page == "🏠 Home":
 
         st.markdown("""
         <div class='metric-box'>
+
         <h5>RNA Support</h5>
+
         <h2>✓</h2>
+
         </div>
         """, unsafe_allow_html=True)
 
@@ -428,27 +461,96 @@ if page == "🏠 Home":
 
         st.markdown("""
         <div class='metric-box'>
+
         <h5>Pocket Detection</h5>
+
         <h2>NeighborSearch</h2>
+
         </div>
         """, unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
+    # =====================================================
+    # ABOUT
+    # =====================================================
+
     st.markdown("""
     <div class='feature-card'>
 
-    <h2>🧬 About RNALigVS</h2>
+    <h2>
+    🧬 About RNALigVS
+    </h2>
 
-    RNALigVS is a docking-free RNA-focused
-    virtual screening framework using:
+    <p style='font-size:17px;'>
 
-    <ul>
-    <li>KD-tree NeighborSearch pocket detection</li>
-    <li>Physics-informed interaction scoring</li>
-    <li>Pocket-ligand compatibility analysis</li>
-    <li>Interactive RNA visualization</li>
+    RNA molecules are emerging therapeutic targets due to
+    their involvement in gene regulation, viral replication,
+    riboswitch signaling, and disease progression.
+
+    </p>
+
+    <p style='font-size:17px;'>
+
+    RNALigVS utilizes KD-tree accelerated NeighborSearch
+    pocket detection together with physics-informed
+    interaction descriptors for efficient RNA-focused
+    virtual screening.
+
+    </p>
+
+    <ul style='font-size:16px;'>
+
+    <li>Contact Density</li>
+
+    <li>Electrostatic Score</li>
+
+    <li>Hydrogen Bond Strength</li>
+
+    <li>π-Stacking Energy</li>
+
+    <li>Pocket Depth (Mean)</li>
+
+    <li>Pocket Curvature</li>
+
     </ul>
+
+    <p style='font-size:17px;'>
+
+    The framework enables large-scale docking-free
+    ligand prioritization for RNA-targeted drug discovery.
+
+    </p>
+
+    </div>
+    """, unsafe_allow_html=True)
+
+    # =====================================================
+    # WORKFLOW
+    # =====================================================
+
+    st.markdown("""
+    <div class='feature-card'>
+
+    <h2>
+    ⚙️ RNALigVS Workflow
+    </h2>
+
+    <ol style='font-size:16px;'>
+
+    <li>Upload RNA structure (PDB)</li>
+
+    <li>Upload ligand library (TXT/CSV)</li>
+
+    <li>RNA pocket extraction using NeighborSearch</li>
+
+    <li>Ligand descriptor computation using RDKit</li>
+
+    <li>Physics-informed scoring</li>
+
+    <li>Binding probability prediction</li>
+
+    </ol>
 
     </div>
     """, unsafe_allow_html=True)
@@ -474,10 +576,6 @@ elif page == "🚀 Run Prediction":
     run_button = st.button(
         "Run Prediction"
     )
-
-    # =====================================================
-    # RUN SCREENING
-    # =====================================================
 
     if (
         uploaded_pdb and
@@ -697,7 +795,7 @@ elif page == "📘 Tutorial":
     Upload RNA structure in PDB format.
 
     ### Step 2
-    Upload ligand SMILES file (TXT/CSV).
+    Upload ligand library in TXT/CSV format.
 
     ### Step 3
     RNALigVS computes:
