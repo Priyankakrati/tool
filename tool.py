@@ -1,6 +1,6 @@
 # =========================================================
 # RNALigVS FINAL STREAMLIT SERVER
-# COMPLETE FINAL SCIENTIFIC VERSION
+# CLEAN SCIENTIFIC FINAL VERSION
 # =========================================================
 
 import os
@@ -86,15 +86,6 @@ RNA_RES = {"A", "C", "G", "U"}
 # =========================================================
 # SIDEBAR
 # =========================================================
-
-logo_path = "logo.png"
-
-if os.path.exists(logo_path):
-
-    st.sidebar.image(
-        logo_path,
-        width=180
-    )
 
 st.sidebar.title("RNALigVS")
 
@@ -391,6 +382,8 @@ def show_structure(
 # =========================================================
 
 if page == "🏠 Home":
+
+    logo_path = "logo.png"
 
     col1, col2 = st.columns([1,3])
 
@@ -742,10 +735,6 @@ elif page == "🚀 Run Prediction":
                 result_df,
                 use_container_width=True
             )
-
-            # =============================================
-            # DOWNLOAD
-            # =============================================
 
             csv = result_df.to_csv(
                 index=False
