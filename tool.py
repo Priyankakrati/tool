@@ -745,14 +745,6 @@ elif page == "Run Prediction":
             height=700
         )
 
-        st.info(
-
-            f"Pocket atoms: {len(pocket_atoms)} | "
-
-            f"Phosphate atoms: {len(phosphate_atoms)} | "
-
-            f"Oxygen atoms: {len(oxygen_atoms)}"
-        )
 
     # =====================================================
     # RUN SCREENING
