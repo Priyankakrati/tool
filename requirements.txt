@@ -1,9 +1,9 @@
-streamlit==1.37.1
-pandas==2.2.2
-numpy==1.26.4
-biopython==1.84
-py3Dmol==2.0.4
-pillow==10.4.0
-rdkit-pypi==2022.9.5
-setuptools==69.5.1
+streamlit
+pandas
+numpy
+biopython
+py3Dmol
+pillow
+rdkit
+setuptools
 wheel
