@@ -1,6 +1,6 @@
 # =========================================================
-# RNALigVS FINAL STREAMLIT APP
-# FINAL ERROR-FREE VERSION
+# RNALigVS FINAL DOCKING-FREE STREAMLIT SERVER
+# FINAL EQUATION IMPLEMENTATION
 # =========================================================
 
 import os
@@ -15,7 +15,8 @@ import numpy as np
 import py3Dmol
 
 from rdkit import Chem
-from rdkit.Chem import AllChem
+from rdkit.Chem import Descriptors
+from rdkit.Chem import rdMolDescriptors
 
 from Bio.PDB import (
     PDBParser,
@@ -29,9 +30,18 @@ from Bio.PDB import (
 st.set_page_config(
     page_title="RNALigVS",
     page_icon="🧬",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    layout="wide"
 )
+
+# =========================================================
+# CONSTANTS
+# =========================================================
+
+RNA_RES = {"A", "C", "G", "U"}
+
+IGNORE = {"HOH", "WAT"}
+
+IONS = {"NA", "K", "MG", "CA", "ZN"}
 
 # =========================================================
 # CUSTOM CSS
@@ -46,21 +56,6 @@ st.markdown("""
 
 h1, h2, h3 {
     color: #0B3C74;
-}
-
-.stButton>button {
-    background-color: #0B3C74;
-    color: white;
-    border-radius: 10px;
-    height: 3em;
-    width: 100%;
-    font-size: 16px;
-    font-weight: bold;
-}
-
-.stButton>button:hover {
-    background-color: #1558a6;
-    color: white;
 }
 
 .metric-box {
@@ -81,37 +76,6 @@ h1, h2, h3 {
 
 </style>
 """, unsafe_allow_html=True)
-
-# =========================================================
-# CONSTANTS
-# =========================================================
-
-RNA_RES = {"A", "C", "G", "U"}
-
-IGNORE = {"HOH", "WAT"}
-
-IONS = {"NA", "K", "MG", "CA", "ZN"}
-
-# =========================================================
-# LOAD MODEL
-# =========================================================
-
-@st.cache_resource
-def load_model():
-
-    with open("model_params.json") as f:
-
-        model = json.load(f)
-
-    return model
-
-model = load_model()
-
-weights = model["weights"]
-
-mean = model["mean"]
-
-std = model["std"]
 
 # =========================================================
 # SIDEBAR
@@ -142,23 +106,7 @@ page = st.sidebar.radio(
 )
 
 # =========================================================
-# FUNCTIONS
-# =========================================================
-
-def get_element(atom):
-
-    try:
-
-        el = atom.element.strip()
-
-        if el:
-            return el.upper()
-
-    except:
-        pass
-
-    return atom.get_name()[0].upper()
-
+# CURVATURE
 # =========================================================
 
 def compute_curvature(coords):
@@ -175,11 +123,10 @@ def compute_curvature(coords):
     return eig[0] / eig[-1] if eig[-1] != 0 else 0
 
 # =========================================================
+# POCKET EXTRACTION
+# =========================================================
 
-def compute_features(
-    pdb_path,
-    smiles
-):
+def extract_pocket(pdb_path):
 
     parser = PDBParser(QUIET=True)
 
@@ -189,10 +136,6 @@ def compute_features(
     )
 
     rna_atoms = []
-
-    # =====================================
-    # RNA ATOMS
-    # =====================================
 
     for model in structure:
 
@@ -206,6 +149,29 @@ def compute_features(
                         list(res.get_atoms())
                     )
 
+    coords = np.array(
+        [a.coord for a in rna_atoms]
+    )
+
+    return rna_atoms, coords
+
+# =========================================================
+# FEATURE EXTRACTION
+# =========================================================
+
+def compute_features(
+    pdb_path,
+    smiles
+):
+
+    # =====================================
+    # RNA POCKET
+    # =====================================
+
+    pocket_atoms, pocket_coords = extract_pocket(
+        pdb_path
+    )
+
     # =====================================
     # LIGAND
     # =====================================
@@ -216,185 +182,119 @@ def compute_features(
 
         return None, None
 
-    mol = Chem.AddHs(mol)
+    # =====================================
+    # LIGAND DESCRIPTORS
+    # =====================================
 
-    AllChem.EmbedMolecule(
-        mol,
-        randomSeed=42
+    heavy_atoms = Descriptors.HeavyAtomCount(mol)
+
+    aromatic_rings = rdMolDescriptors.CalcNumAromaticRings(mol)
+
+    h_donors = rdMolDescriptors.CalcNumHBD(mol)
+
+    h_acceptors = rdMolDescriptors.CalcNumHBA(mol)
+
+    tpsa = rdMolDescriptors.CalcTPSA(mol)
+
+    formal_charge = Chem.GetFormalCharge(mol)
+
+    rot_bonds = rdMolDescriptors.CalcNumRotatableBonds(mol)
+
+    # =====================================
+    # RNA POCKET DESCRIPTORS
+    # =====================================
+
+    pocket_size = len(pocket_atoms)
+
+    aromatic_pocket = sum(
+        1 for a in pocket_atoms
+        if a.get_name()[0] in ["C","N"]
     )
 
-    AllChem.UFFOptimizeMolecule(mol)
-
-    conf = mol.GetConformer()
-
-    ligand_coords = []
-
-    ligand_elements = []
-
-    for i in range(mol.GetNumAtoms()):
-
-        pos = conf.GetAtomPosition(i)
-
-        ligand_coords.append(
-            np.array([
-                pos.x,
-                pos.y,
-                pos.z
-            ])
-        )
-
-        ligand_elements.append(
-            mol.GetAtomWithIdx(i).GetSymbol()
-        )
-
-    # =====================================
-    # NeighborSearch
-    # =====================================
-
-    ns = NeighborSearch(rna_atoms)
-
-    pocket_atoms = set()
-
-    for coord in ligand_coords:
-
-        nearby_atoms = ns.search(
-            coord,
-            6.0,
-            level='A'
-        )
-
-        for atom in nearby_atoms:
-
-            pocket_atoms.add(atom)
-
-    pocket_atoms = list(pocket_atoms)
-
-    if len(pocket_atoms) == 0:
-
-        pocket_atoms = rna_atoms[:200]
-
-    # =====================================
-    # FEATURES
-    # =====================================
-
-    elec = 0
-
-    hbond = 0
-
-    hb_count = 0
-
-    contact = 0
-
-    for coord, elem in zip(
-        ligand_coords,
-        ligand_elements
-    ):
-
-        for pa in pocket_atoms:
-
-            d = np.linalg.norm(
-                coord - pa.coord
-            )
-
-            if d > 8:
-                continue
-
-            # Electrostatic
-            elec += 1 / (d**2 + 1)
-
-            # Hbond
-            if (
-                elem in ["N","O"] and
-                get_element(pa) in ["N","O"] and
-                d < 3.5
-            ):
-
-                hbond += 1 / (d**2 + 0.5)
-
-                hb_count += 1
-
-            # Contact
-            if d < 5:
-
-                contact += 1
-
-    # =====================================
-    # NORMALIZATION
-    # =====================================
-
-    ligand_size = max(
-        len(ligand_coords),
-        1
+    phosphate_atoms = sum(
+        1 for a in pocket_atoms
+        if a.get_name().startswith("P")
     )
 
-    contact_safe = max(contact, 1)
-
-    contact_density = contact / ligand_size
-
-    electrostatic_score = elec / contact_safe
-
-    if hb_count > 0:
-
-        hbond_strength = hbond / hb_count
-
-    else:
-
-        hbond_strength = 0
-
-    # =====================================
-    # PI STACKING
-    # =====================================
-
-    pi_stack = 0
-
-    for coord, elem in zip(
-        ligand_coords,
-        ligand_elements
-    ):
-
-        if elem not in ["C","N"]:
-            continue
-
-        for pa in pocket_atoms:
-
-            if get_element(pa) not in ["C","N"]:
-                continue
-
-            d = np.linalg.norm(
-                coord - pa.coord
-            )
-
-            if 3.0 < d < 4.5:
-
-                pi_stack += 1 / (d**2)
-
-    pi_stack /= contact_safe
-
-    # =====================================
-    # CURVATURE
-    # =====================================
-
-    pocket_coords = np.array(
-        [a.coord for a in pocket_atoms]
+    pocket_depth_mean = np.mean(
+        np.linalg.norm(
+            pocket_coords -
+            np.mean(pocket_coords, axis=0),
+            axis=1
+        )
     )
 
     curvature = compute_curvature(
         pocket_coords
     )
 
+    # =====================================
+    # FINAL DOCKING-FREE FEATURES
+    # =====================================
+
+    # Contact Density
+    contact_density = min(
+        (heavy_atoms * aromatic_rings) /
+        (pocket_size + 1),
+        1
+    )
+
+    # Electrostatic Score
+    electrostatic_score = min(
+        (
+            abs(formal_charge) +
+            h_acceptors +
+            phosphate_atoms * 0.01
+        ) / 10,
+        1
+    )
+
+    # Hbond Strength
+    hbond_strength = min(
+        (
+            h_donors +
+            h_acceptors
+        ) / 20,
+        1
+    )
+
+    # Pi Stacking
+    pi_stacking = min(
+        (
+            aromatic_rings *
+            aromatic_pocket
+        ) / 500,
+        1
+    )
+
+    # Pocket Depth Normalization
+    pocket_depth_mean = min(
+        pocket_depth_mean / 20,
+        1
+    )
+
+    # Curvature Normalization
+    curvature = min(
+        curvature,
+        1
+    )
+
     features = {
 
-        "Contact_density":
+        "Contact Density":
             contact_density,
 
-        "Electrostatic_score":
+        "Electrostatic Score":
             electrostatic_score,
 
-        "Hbond_strength":
+        "Hbond Strength":
             hbond_strength,
 
-        "Pi_stacking":
-            pi_stack,
+        "Pi-stacking energy":
+            pi_stacking,
+
+        "Pocket depth (mean)":
+            pocket_depth_mean,
 
         "Curvature":
             curvature
@@ -406,24 +306,37 @@ def compute_features(
     )
 
 # =========================================================
-# SAFE PREDICTION
+# FINAL RNALigVS EQUATION
 # =========================================================
 
-def predict_probability(features):
+def calculate_score(features):
 
-    score = 0
+    score = (
 
-    for f in weights:
+        0.35 * features["Contact Density"]
 
-        if f in features:
+        + 0.30 * features["Electrostatic Score"]
 
-            score += (
-                weights[f] * features[f]
-            )
+        + 0.10 * features["Hbond Strength"]
 
-    z = (
-        score - mean
-    ) / std
+        + 0.10 * features["Pi-stacking energy"]
+
+        + 0.10 * features["Pocket depth (mean)"]
+
+        + 0.05 * features["Curvature"]
+    )
+
+    return score
+
+# =========================================================
+# PROBABILITY
+# =========================================================
+
+def probability(score):
+
+    # Probability scaling
+
+    z = (score - 0.5) * 8
 
     prob = 1 / (
         1 + np.exp(-z)
@@ -431,6 +344,8 @@ def predict_probability(features):
 
     return prob
 
+# =========================================================
+# VISUALIZATION
 # =========================================================
 
 def show_structure(
@@ -452,7 +367,6 @@ def show_structure(
         "pdb"
     )
 
-    # RNA structure
     view.setStyle({
 
         "cartoon": {
@@ -461,7 +375,7 @@ def show_structure(
         }
     })
 
-    # Pocket spheres
+    # Pocket atoms
     for c in pocket_coords:
 
         view.addSphere({
@@ -474,11 +388,11 @@ def show_structure(
 
             },
 
-            "radius": 0.5,
+            "radius": 0.35,
 
             "color": "red",
 
-            "opacity": 0.7
+            "opacity": 0.6
         })
 
     view.setBackgroundColor("white")
@@ -493,28 +407,11 @@ def show_structure(
 
 if page == "🏠 Home":
 
-    col1, col2 = st.columns([1,2])
+    st.title("RNALigVS")
 
-    with col1:
-
-        if os.path.exists(logo_path):
-
-            st.image(
-                logo_path,
-                width=250
-            )
-
-    with col2:
-
-        st.markdown(
-            "<h1 style='text-align:center;'>RNALigVS</h1>",
-            unsafe_allow_html=True
-        )
-
-        st.markdown(
-            "<h3 style='text-align:center;color:#506784;'>RNA–Ligand Virtual Screening Platform</h3>",
-            unsafe_allow_html=True
-        )
+    st.subheader(
+        "RNA–Ligand Virtual Screening Platform"
+    )
 
     st.divider()
 
@@ -525,7 +422,7 @@ if page == "🏠 Home":
         st.markdown("""
         <div class='metric-box'>
         <h5>Screening Type</h5>
-        <h2>Structure-Based</h2>
+        <h2>Docking-Free</h2>
         </div>
         """, unsafe_allow_html=True)
 
@@ -542,8 +439,8 @@ if page == "🏠 Home":
 
         st.markdown("""
         <div class='metric-box'>
-        <h5>Docking Required</h5>
-        <h2>No</h2>
+        <h5>Pocket Detection</h5>
+        <h2>NeighborSearch</h2>
         </div>
         """, unsafe_allow_html=True)
 
@@ -554,22 +451,21 @@ if page == "🏠 Home":
 
     <h2>🧬 About RNALigVS</h2>
 
-    RNALigVS is an RNA-focused virtual screening
-    framework for identifying potential RNA-binding
-    ligands using structure-based interaction scoring.
+    RNALigVS is a docking-free RNA-focused
+    virtual screening framework that combines:
 
     <ul>
     <li>KD-tree NeighborSearch pocket detection</li>
-    <li>RNA-specific interaction scoring</li>
-    <li>Binding probability prediction</li>
-    <li>Interactive py3Dmol visualization</li>
+    <li>Physics-informed interaction scoring</li>
+    <li>Pocket-ligand compatibility analysis</li>
+    <li>Interactive RNA visualization</li>
     </ul>
 
     </div>
     """, unsafe_allow_html=True)
 
 # =========================================================
-# RUN PREDICTION
+# PREDICTION PAGE
 # =========================================================
 
 elif page == "🚀 Run Prediction":
@@ -598,31 +494,48 @@ elif page == "🚀 Run Prediction":
 
         st.success("RNA structure loaded!")
 
-        features, pocket_coords = compute_features(
+        result = compute_features(
             pdb_path,
             smiles
         )
 
-        if features is None:
+        if result is None:
 
             st.error(
-                "Invalid SMILES string!"
+                "Invalid SMILES!"
             )
 
         else:
 
-            prob = predict_probability(
+            features, pocket_coords = result
+
+            score = calculate_score(
                 features
             )
+
+            prob = probability(score)
+
+            # =================================
+            # RESULTS
+            # =================================
 
             st.subheader(
                 "Binding Probability"
             )
 
             st.metric(
-                "RNALigVS Score",
+                "RNALigVS Probability",
                 f"{prob:.4f}"
             )
+
+            st.metric(
+                "RNALigVS Score",
+                f"{score:.4f}"
+            )
+
+            # =================================
+            # FEATURES
+            # =================================
 
             st.subheader(
                 "Extracted Features"
@@ -636,6 +549,10 @@ elif page == "🚀 Run Prediction":
                 feat_df,
                 use_container_width=True
             )
+
+            # =================================
+            # STRUCTURE
+            # =================================
 
             st.subheader(
                 "RNA Binding Pocket"
@@ -668,14 +585,20 @@ elif page == "📘 Tutorial":
     Enter ligand SMILES.
 
     ### Step 3
-    Run prediction.
+    RNALigVS computes:
+    - Contact Density
+    - Electrostatic Score
+    - Hbond Strength
+    - π-stacking energy
+    - Pocket depth
+    - Curvature
 
     ### Step 4
-    Visualize RNA binding pocket.
+    Final binding probability is generated.
 
     ### Output
-    - Binding probability
-    - Interaction features
-    - Pocket visualization
+    - RNALigVS Score
+    - Binding Probability
+    - RNA pocket visualization
 
     """)
