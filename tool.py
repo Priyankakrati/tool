@@ -526,7 +526,7 @@ if page == "Home":
     <div class='feature-card'>
 
     <h2>
-    ⚙️ RNALigVS Workflow
+    RNALigVS Workflow
     </h2>
 
     <ol style='font-size:16px;'>
