@@ -26,17 +26,11 @@ from Bio.PDB import (
 # =========================================================
 
 from utils_scientific import (
-
     pocket_residue_table,
-
     pocket_geometry,
-
     confidence_label,
-
     interaction_summary,
-
     drug_likeness,
-
     tanimoto
 )
 # =========================================================
