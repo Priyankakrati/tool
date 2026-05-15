@@ -1,6 +1,4 @@
 # RNALigVS Advanced Streamlit Application
-
-```python
 # =========================================================
 # RNALigVS ADVANCED STREAMLIT SERVER
 # FINAL INTERACTIVE VERSION
