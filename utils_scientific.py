@@ -217,3 +217,70 @@ def tanimoto(sm1, sm2):
     )
 
     return round(similarity, 3)
+
+# =========================================================
+# STABLE 3DMOL RNA POCKET VISUALIZATION
+# =========================================================
+
+import py3Dmol
+
+
+def visualize_pocket(pdb_file, pocket_coords):
+
+    with open(pdb_file, "r") as f:
+
+        pdb_data = f.read()
+
+    # LIMIT VERY LARGE POCKETS
+    if len(pocket_coords) > 2000:
+
+        pocket_coords = pocket_coords[:2000]
+
+    view = py3Dmol.view(
+        width=900,
+        height=600
+    )
+
+    # LOAD PDB
+    view.addModel(
+        pdb_data,
+        "pdb"
+    )
+
+    # RNA CARTOON
+    view.setStyle({
+
+        "cartoon": {
+
+            "color": "spectrum"
+        }
+    })
+
+    # POCKET SPHERES
+    for coord in pocket_coords:
+
+        view.addSphere({
+
+            "center": {
+
+                "x": float(coord[0]),
+
+                "y": float(coord[1]),
+
+                "z": float(coord[2])
+            },
+
+            "radius": 0.45,
+
+            "color": "red",
+
+            "opacity": 0.6
+        })
+
+    # ZOOM
+    view.zoomTo()
+
+    # VERY IMPORTANT
+    view.show()
+
+    return view._make_html()
