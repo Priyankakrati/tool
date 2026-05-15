@@ -1,10 +1,9 @@
 # =========================================================
-# RNALigVS FINAL DOCKING-FREE STREAMLIT SERVER
-# FINAL EQUATION IMPLEMENTATION
+# RNALigVS FINAL STREAMLIT SERVER
+# COMPLETE FINAL CODE
 # =========================================================
 
 import os
-import json
 import tempfile
 
 import streamlit as st
@@ -30,18 +29,9 @@ from Bio.PDB import (
 st.set_page_config(
     page_title="RNALigVS",
     page_icon="🧬",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
-
-# =========================================================
-# CONSTANTS
-# =========================================================
-
-RNA_RES = {"A", "C", "G", "U"}
-
-IGNORE = {"HOH", "WAT"}
-
-IONS = {"NA", "K", "MG", "CA", "ZN"}
 
 # =========================================================
 # CUSTOM CSS
@@ -74,8 +64,28 @@ h1, h2, h3 {
     box-shadow: 0px 2px 8px rgba(0,0,0,0.08);
 }
 
+.stButton>button {
+    background-color: #0B3C74;
+    color: white;
+    border-radius: 10px;
+    height: 3em;
+    width: 100%;
+    font-size: 16px;
+    font-weight: bold;
+}
+
 </style>
 """, unsafe_allow_html=True)
+
+# =========================================================
+# CONSTANTS
+# =========================================================
+
+RNA_RES = {"A", "C", "G", "U"}
+
+IGNORE = {"HOH", "WAT"}
+
+IONS = {"NA", "K", "MG", "CA", "ZN"}
 
 # =========================================================
 # SIDEBAR
@@ -164,27 +174,19 @@ def compute_features(
     smiles
 ):
 
-    # =====================================
-    # RNA POCKET
-    # =====================================
-
     pocket_atoms, pocket_coords = extract_pocket(
         pdb_path
     )
-
-    # =====================================
-    # LIGAND
-    # =====================================
 
     mol = Chem.MolFromSmiles(smiles)
 
     if mol is None:
 
-        return None, None
+        return None
 
-    # =====================================
+    # =====================================================
     # LIGAND DESCRIPTORS
-    # =====================================
+    # =====================================================
 
     heavy_atoms = Descriptors.HeavyAtomCount(mol)
 
@@ -194,21 +196,17 @@ def compute_features(
 
     h_acceptors = rdMolDescriptors.CalcNumHBA(mol)
 
-    tpsa = rdMolDescriptors.CalcTPSA(mol)
-
     formal_charge = Chem.GetFormalCharge(mol)
 
-    rot_bonds = rdMolDescriptors.CalcNumRotatableBonds(mol)
-
-    # =====================================
+    # =====================================================
     # RNA POCKET DESCRIPTORS
-    # =====================================
+    # =====================================================
 
     pocket_size = len(pocket_atoms)
 
     aromatic_pocket = sum(
         1 for a in pocket_atoms
-        if a.get_name()[0] in ["C","N"]
+        if a.get_name()[0] in ["C", "N"]
     )
 
     phosphate_atoms = sum(
@@ -228,52 +226,46 @@ def compute_features(
         pocket_coords
     )
 
-    # =====================================
-    # FINAL DOCKING-FREE FEATURES
-    # =====================================
+    # =====================================================
+    # FINAL FEATURES
+    # =====================================================
 
-    # Contact Density
     contact_density = min(
-        (heavy_atoms * aromatic_rings) /
-        (pocket_size + 1),
+        (heavy_atoms * aromatic_rings)
+        / (pocket_size + 1),
         1
     )
 
-    # Electrostatic Score
     electrostatic_score = min(
         (
-            abs(formal_charge) +
-            h_acceptors +
-            phosphate_atoms * 0.01
+            abs(formal_charge)
+            + h_acceptors
+            + phosphate_atoms * 0.01
         ) / 10,
         1
     )
 
-    # Hbond Strength
     hbond_strength = min(
         (
-            h_donors +
-            h_acceptors
+            h_donors
+            + h_acceptors
         ) / 20,
         1
     )
 
-    # Pi Stacking
     pi_stacking = min(
         (
-            aromatic_rings *
-            aromatic_pocket
+            aromatic_rings
+            * aromatic_pocket
         ) / 500,
         1
     )
 
-    # Pocket Depth Normalization
     pocket_depth_mean = min(
         pocket_depth_mean / 20,
         1
     )
 
-    # Curvature Normalization
     curvature = min(
         curvature,
         1
@@ -334,8 +326,6 @@ def calculate_score(features):
 
 def probability(score):
 
-    # Probability scaling
-
     z = (score - 0.5) * 8
 
     prob = 1 / (
@@ -375,7 +365,6 @@ def show_structure(
         }
     })
 
-    # Pocket atoms
     for c in pocket_coords:
 
         view.addSphere({
@@ -452,7 +441,7 @@ if page == "🏠 Home":
     <h2>🧬 About RNALigVS</h2>
 
     RNALigVS is a docking-free RNA-focused
-    virtual screening framework that combines:
+    virtual screening framework using:
 
     <ul>
     <li>KD-tree NeighborSearch pocket detection</li>
@@ -465,23 +454,36 @@ if page == "🏠 Home":
     """, unsafe_allow_html=True)
 
 # =========================================================
-# PREDICTION PAGE
+# RUN PREDICTION PAGE
 # =========================================================
 
 elif page == "🚀 Run Prediction":
 
-    st.header("RNA–Ligand Prediction")
+    st.header("RNA–Ligand Virtual Screening")
 
     uploaded_pdb = st.file_uploader(
         "Upload RNA PDB File",
         type=["pdb"]
     )
 
-    smiles = st.text_input(
-        "Enter Ligand SMILES"
+    uploaded_smiles = st.file_uploader(
+        "Upload SMILES TXT/CSV File",
+        type=["txt", "csv"]
     )
 
-    if uploaded_pdb and smiles:
+    run_button = st.button(
+        "Run Prediction"
+    )
+
+    # =====================================================
+    # RUN SCREENING
+    # =====================================================
+
+    if (
+        uploaded_pdb and
+        uploaded_smiles and
+        run_button
+    ):
 
         with tempfile.NamedTemporaryFile(
             delete=False,
@@ -494,65 +496,178 @@ elif page == "🚀 Run Prediction":
 
         st.success("RNA structure loaded!")
 
-        result = compute_features(
-            pdb_path,
-            smiles
-        )
+        # =================================================
+        # LOAD SMILES
+        # =================================================
 
-        if result is None:
+        try:
+
+            if uploaded_smiles.name.endswith(".csv"):
+
+                smiles_df = pd.read_csv(
+                    uploaded_smiles
+                )
+
+                smiles_col = None
+
+                for c in smiles_df.columns:
+
+                    if "smile" in c.lower():
+
+                        smiles_col = c
+                        break
+
+                if smiles_col is None:
+
+                    smiles_col = smiles_df.columns[0]
+
+                smiles_list = (
+                    smiles_df[smiles_col]
+                    .dropna()
+                    .tolist()
+                )
+
+            else:
+
+                smiles_list = [
+
+                    line.strip()
+
+                    for line in uploaded_smiles
+                    .read()
+                    .decode("utf-8")
+                    .splitlines()
+
+                    if line.strip()
+                ]
+
+        except Exception as e:
 
             st.error(
-                "Invalid SMILES!"
+                f"Error reading SMILES file: {e}"
+            )
+
+            st.stop()
+
+        # =================================================
+        # SCREENING
+        # =================================================
+
+        results = []
+
+        progress = st.progress(0)
+
+        total = len(smiles_list)
+
+        for idx, smiles in enumerate(smiles_list):
+
+            try:
+
+                result = compute_features(
+                    pdb_path,
+                    smiles
+                )
+
+                if result is None:
+                    continue
+
+                features, pocket_coords = result
+
+                score = calculate_score(
+                    features
+                )
+
+                prob = probability(score)
+
+                row = {
+
+                    "SMILES": smiles,
+
+                    "Interaction Probability":
+                        round(prob, 4),
+
+                    "RNALigVS Score":
+                        round(score, 4)
+                }
+
+                row.update({
+
+                    k: round(v, 4)
+
+                    for k, v in features.items()
+                })
+
+                results.append(row)
+
+            except:
+                continue
+
+            progress.progress(
+                (idx + 1) / total
+            )
+
+        # =================================================
+        # RESULTS
+        # =================================================
+
+        if len(results) == 0:
+
+            st.error(
+                "No valid ligands processed!"
             )
 
         else:
 
-            features, pocket_coords = result
+            result_df = pd.DataFrame(results)
 
-            score = calculate_score(
-                features
+            result_df = result_df.sort_values(
+
+                "Interaction Probability",
+
+                ascending=False
             )
 
-            prob = probability(score)
+            result_df["Rank"] = range(
+                1,
+                len(result_df) + 1
+            )
 
-            # =================================
-            # RESULTS
-            # =================================
+            st.success(
+                "Virtual screening completed!"
+            )
 
             st.subheader(
-                "Binding Probability"
-            )
-
-            st.metric(
-                "RNALigVS Probability",
-                f"{prob:.4f}"
-            )
-
-            st.metric(
-                "RNALigVS Score",
-                f"{score:.4f}"
-            )
-
-            # =================================
-            # FEATURES
-            # =================================
-
-            st.subheader(
-                "Extracted Features"
-            )
-
-            feat_df = pd.DataFrame(
-                [features]
+                "Predicted Ligands"
             )
 
             st.dataframe(
-                feat_df,
+                result_df,
                 use_container_width=True
             )
 
-            # =================================
-            # STRUCTURE
-            # =================================
+            # =============================================
+            # DOWNLOAD
+            # =============================================
+
+            csv = result_df.to_csv(
+                index=False
+            ).encode("utf-8")
+
+            st.download_button(
+
+                label="Download Results CSV",
+
+                data=csv,
+
+                file_name=
+                "RNALigVS_results.csv",
+
+                mime="text/csv"
+            )
+
+            # =============================================
+            # VISUALIZATION
+            # =============================================
 
             st.subheader(
                 "RNA Binding Pocket"
@@ -582,7 +697,7 @@ elif page == "📘 Tutorial":
     Upload RNA structure in PDB format.
 
     ### Step 2
-    Enter ligand SMILES.
+    Upload ligand SMILES file (TXT/CSV).
 
     ### Step 3
     RNALigVS computes:
@@ -594,11 +709,12 @@ elif page == "📘 Tutorial":
     - Curvature
 
     ### Step 4
-    Final binding probability is generated.
+    Final interaction probability is generated.
 
     ### Output
-    - RNALigVS Score
-    - Binding Probability
+    - Ranked ligands
+    - RNALigVS score
+    - Interaction probability
     - RNA pocket visualization
 
     """)
