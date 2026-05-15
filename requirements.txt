@@ -1,6 +1,7 @@
 streamlit
-numpy
 pandas
-biopython
-rdkit
+numpy
 py3Dmol
+biopython
+rdkit-pypi
+pillow
