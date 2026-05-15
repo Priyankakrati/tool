@@ -835,57 +835,57 @@ results = []
 
         ##total = len(smiles_list)
 
-        for idx, smiles in enumerate(smiles_list):
+    for idx, smiles in enumerate(smiles_list):
 
-            try:
+        try:
 
-                result = compute_features(
-                    pdb_path,
-                    smiles
-                )
+            result = compute_features(
+                pdb_path,
+                smiles
+            )
 
-                if result is None:
-                    continue
-
-                (
-                    features,
-                    pocket_coords,
-                    phosphate_atoms,
-                    oxygen_atoms
-                ) = result
-
-                score = calculate_score(
-                    features
-                )
-
-                prob = probability(score)
-
-                row = {
-
-                    "SMILES": smiles,
-
-                    "Interaction Probability":
-                        round(prob, 4),
-
-                    "RNALigVS Score":
-                        round(score, 4)
-                }
-
-                row.update({
-
-                    k: round(v, 4)
-
-                    for k, v in features.items()
-                })
-
-                results.append(row)
-
-            except:
+            if result is None:
                 continue
 
-            progress.progress(
-                (idx + 1) / total
+            (
+                features,
+                pocket_coords,
+                phosphate_atoms,
+                oxygen_atoms
+            ) = result
+
+            score = calculate_score(
+                features
             )
+
+            prob = probability(score)
+
+            row = {
+
+                "SMILES": smiles,
+
+                "Interaction Probability":
+                    round(prob, 4),
+
+                "RNALigVS Score":
+                    round(score, 4)
+            }
+
+            row.update({
+
+                k: round(v, 4)
+
+                for k, v in features.items()
+            })
+
+            results.append(row)
+
+        except:
+            continue
+
+        progress.progress(
+            (idx + 1) / total
+        )
 
 # =================================================
 # RESULTS
