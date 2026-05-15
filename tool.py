@@ -96,9 +96,9 @@ st.sidebar.markdown(
 page = st.sidebar.radio(
     "Navigation",
     [
-        "🏠 Home",
-        "🚀 Run Prediction",
-        "📘 Tutorial"
+        "Home",
+        "Run Prediction",
+        "Tutorial"
     ]
 )
 
@@ -381,7 +381,7 @@ def show_structure(
 # HOME PAGE
 # =========================================================
 
-if page == "🏠 Home":
+if page == "Home":
 
     logo_path = "logo.png"
 
@@ -472,7 +472,7 @@ if page == "🏠 Home":
     <div class='feature-card'>
 
     <h2>
-    🧬 About RNALigVS
+    About RNALigVS
     </h2>
 
     <p style='font-size:17px;'>
@@ -552,7 +552,7 @@ if page == "🏠 Home":
 # RUN PREDICTION PAGE
 # =========================================================
 
-elif page == "🚀 Run Prediction":
+elif page == "Run Prediction":
 
     st.header("RNA–Ligand Virtual Screening")
 
@@ -774,7 +774,7 @@ elif page == "🚀 Run Prediction":
 # TUTORIAL PAGE
 # =========================================================
 
-elif page == "📘 Tutorial":
+elif page == "Tutorial":
 
     st.header("RNALigVS Tutorial")
 
