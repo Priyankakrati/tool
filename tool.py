@@ -96,9 +96,9 @@ st.sidebar.markdown(
 page = st.sidebar.radio(
     "Navigation",
     [
-        "🏠 Home",
-        "🚀 Run Prediction",
-        "📘 Tutorial"
+        "Home",
+        "Run Prediction",
+        "Tutorial"
     ]
 )
 
@@ -517,6 +517,7 @@ if page == "Home":
         </div>
         """, unsafe_allow_html=True)
 
+    
     st.divider()
 
     # =====================================================
@@ -561,7 +562,7 @@ if page == "Home":
     st.markdown("""
     <div class='feature-card'>
 
-    <h2>🧬 About RNALigVS</h2>
+    <h2>About RNALigVS</h2>
 
     <p style='font-size:17px; line-height:1.8;'>
 
@@ -601,7 +602,7 @@ if page == "Home":
     st.markdown("""
     <div class='feature-card'>
 
-    <h2>⚙️ Scientific Workflow</h2>
+    <h2>Scientific Workflow</h2>
 
     <ol style='font-size:17px; line-height:1.9;'>
 
@@ -683,23 +684,12 @@ if page == "Home":
     </div>
     """, unsafe_allow_html=True)
 
-    # =====================================================
-    # EQUATION
-    # =====================================================
-
-    st.markdown("""
-    <div class='feature-card'>
-
-    <h2>RNALigVS Scoring Function</h2>
-
-    </div>
-    """, unsafe_allow_html=True)
 
 # =========================================================
 # RUN PREDICTION PAGE
 # =========================================================
 
-elif page == "🚀 Run Prediction":
+elif page == "Run Prediction":
 
     st.header("RNA–Ligand Virtual Screening")
 
@@ -998,7 +988,7 @@ elif page == "🚀 Run Prediction":
 # TUTORIAL PAGE
 # =========================================================
 
-elif page == "📘 Tutorial":
+elif page == "Tutorial":
 
     st.header("RNALigVS Tutorial")
 
