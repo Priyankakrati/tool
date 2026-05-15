@@ -808,7 +808,6 @@ elif page == "Run Prediction":
             view._make_html(),
             height=700
         )
-    
     c1, c2, c3 = st.columns(3)
 
 with c1:
