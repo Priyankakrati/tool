@@ -829,331 +829,331 @@ elif page == "Run Prediction":
         # SCREENING
         # =================================================
 
-results = []
+        results = []
 
-        ##progress = st.progress(0)
+        progress = st.progress(0)
 
-        ##total = len(smiles_list)
+        total = len(smiles_list)
 
-    for idx, smiles in enumerate(smiles_list):
+        for idx, smiles in enumerate(smiles_list):
 
-        try:
+            try:
 
-            result = compute_features(
-                pdb_path,
-                smiles
-            )
+                result = compute_features(
+                    pdb_path,
+                    smiles
+                )
 
-            if result is None:
+                if result is None:
+                    continue
+
+                (
+                    features,
+                    pocket_coords,
+                    phosphate_atoms,
+                    oxygen_atoms
+                ) = result
+
+                score = calculate_score(
+                    features
+                )
+
+                prob = probability(score)
+
+                row = {
+
+                    "SMILES": smiles,
+
+                    "Interaction Probability":
+                        round(prob, 4),
+
+                    "RNALigVS Score":
+                        round(score, 4)
+                }
+
+                row.update({
+
+                    k: round(v, 4)
+
+                    for k, v in features.items()
+                })
+
+                results.append(row)
+
+            except:
                 continue
 
-            (
-                features,
-                pocket_coords,
-                phosphate_atoms,
-                oxygen_atoms
-            ) = result
-
-            score = calculate_score(
-                features
+            progress.progress(
+                (idx + 1) / total
             )
 
-            prob = probability(score)
+        # =================================================
+        # RESULTS
+        # =================================================
 
-            row = {
+        if len(results) == 0:
 
-                "SMILES": smiles,
+            st.error(
+                "No valid ligands processed!"
+            )
 
-                "Interaction Probability":
-                    round(prob, 4),
+        else:
 
-                "RNALigVS Score":
-                    round(score, 4)
-            }
+            # =============================================
+            # CREATE DATAFRAME
+            # =============================================
 
-            row.update({
+            result_df = pd.DataFrame(results)
 
-                k: round(v, 4)
+            result_df = result_df.sort_values(
 
-                for k, v in features.items()
-            })
+                "Interaction Probability",
 
-            results.append(row)
+                ascending=False
+            )
 
-        except:
-            continue
+            result_df["Rank"] = range(
+                1,
+                len(result_df) + 1
+            )
 
-        progress.progress(
-            (idx + 1) / total
-        )
+            # =============================================
+            # SHOW RESULTS
+            # =============================================
 
-# =================================================
-# RESULTS
-# =================================================
+            st.success(
+                "Virtual screening completed!"
+            )
 
-if len(results) == 0:
+            st.subheader(
+                "Predicted Ligands"
+            )
 
-    st.error(
-        "No valid ligands processed!"
-    )
+            st.dataframe(
+                result_df,
+                use_container_width=True
+            )
 
-else:
+            # =============================================
+            # DOWNLOAD
+            # =============================================
 
-    # =============================================
-    # CREATE DATAFRAME
-    # =============================================
+            csv = result_df.to_csv(
+                index=False
+            ).encode("utf-8")
 
-    result_df = pd.DataFrame(results)
+            st.download_button(
 
-    result_df = result_df.sort_values(
+                label="Download Results CSV",
 
-        "Interaction Probability",
+                data=csv,
 
-        ascending=False
-    )
+                file_name="RNALigVS_results.csv",
 
-    result_df["Rank"] = range(
-        1,
-        len(result_df) + 1
-    )
+                mime="text/csv"
+            )
 
-    # =============================================
-    # SHOW RESULTS
-    # =============================================
+            # =============================================
+            # LIGAND ANALYSIS
+            # =============================================
 
-    st.success(
-        "Virtual screening completed!"
-    )
+            st.header(
+                "Selected Ligand Analysis"
+            )
 
-    st.subheader(
-        "Predicted Ligands"
-    )
+            selected_smiles = st.selectbox(
 
-    st.dataframe(
-        result_df,
-        use_container_width=True
-    )
+                "Select SMILES",
 
-    # =============================================
-    # DOWNLOAD
-    # =============================================
+                result_df["SMILES"],
 
-    csv = result_df.to_csv(
-        index=False
-    ).encode("utf-8")
+                key="ligand_selector"
+            )
 
-    st.download_button(
-
-        label="Download Results CSV",
-
-        data=csv,
-
-        file_name="RNALigVS_results.csv",
-
-        mime="text/csv"
-    )
-
-    # =============================================
-    # LIGAND ANALYSIS
-    # =============================================
-
-    st.header(
-        "Selected Ligand Analysis"
-    )
-
-    selected_smiles = st.selectbox(
-
-        "Select SMILES",
-
-        result_df["SMILES"],
-
-        key="ligand_selector"
-    )
-
-    lip = lipinski(
-        selected_smiles
-    )
-
-    selected_row = result_df[
-        result_df["SMILES"] ==
-        selected_smiles
-    ].iloc[0]
-
-    # =============================================
-    # PANELS
-    # =============================================
-
-    panel1, panel2 = st.columns(2)
-
-    # =============================================
-    # LEFT PANEL
-    # =============================================
-
-    with panel1:
-
-        st.subheader(
-            "Ligand Selection"
-        )
-
-        st.code(
-            selected_smiles
-        )
-
-        try:
-
-            from rdkit.Chem import Draw
-
-            mol = Chem.MolFromSmiles(
+            lip = lipinski(
                 selected_smiles
             )
 
-            if mol:
+            selected_row = result_df[
+                result_df["SMILES"] ==
+                selected_smiles
+            ].iloc[0]
 
-                img = Draw.MolToImage(
-                    mol,
-                    size=(450,300)
+            # =============================================
+            # PANELS
+            # =============================================
+
+            panel1, panel2 = st.columns(2)
+
+            # =============================================
+            # LEFT PANEL
+            # =============================================
+
+            with panel1:
+
+                st.subheader(
+                    "Ligand Selection"
                 )
 
-                st.image(
-                    img,
+                st.code(
+                    selected_smiles
+                )
+
+                try:
+
+                    from rdkit.Chem import Draw
+
+                    mol = Chem.MolFromSmiles(
+                        selected_smiles
+                    )
+
+                    if mol:
+
+                        img = Draw.MolToImage(
+                            mol,
+                            size=(450,300)
+                        )
+
+                        st.image(
+                            img,
+                            use_container_width=True
+                        )
+
+                except:
+
+                    st.warning(
+                        "2D structure rendering failed."
+                    )
+
+            # =============================================
+            # RIGHT PANEL
+            # =============================================
+
+            with panel2:
+
+                st.subheader(
+                    "Lipinski's Rule"
+                )
+
+                lip_df = pd.DataFrame(
+                    [lip]
+                )
+
+                st.dataframe(
+                    lip_df,
                     use_container_width=True
                 )
 
-        except:
+            # =============================================
+            # INTERACTION PROFILE
+            # =============================================
 
-            st.warning(
-                "2D structure rendering failed."
+            st.subheader(
+                "Interaction Profile"
             )
 
-    # =============================================
-    # RIGHT PANEL
-    # =============================================
+            interaction_df = pd.DataFrame({
 
-    with panel2:
+                "Feature": [
 
-        st.subheader(
-            "Lipinski's Rule"
-        )
+                    "Contact Density",
 
-        lip_df = pd.DataFrame(
-            [lip]
-        )
+                    "Electrostatic Score",
 
-        st.dataframe(
-            lip_df,
-            use_container_width=True
-        )
+                    "Hbond Strength",
 
-    # =============================================
-    # INTERACTION PROFILE
-    # =============================================
+                    "Pi-stacking energy",
 
-    st.subheader(
-        "Interaction Profile"
-    )
+                    "Pocket depth",
 
-    interaction_df = pd.DataFrame({
-
-        "Feature": [
-
-            "Contact Density",
-
-            "Electrostatic Score",
-
-            "Hbond Strength",
-
-            "Pi-stacking energy",
-
-            "Pocket depth",
-
-            "Curvature"
-        ],
-
-        "Score": [
-
-            selected_row["Contact Density"],
-
-            selected_row["Electrostatic Score"],
-
-            selected_row["Hbond Strength"],
-
-            selected_row["Pi-stacking energy"],
-
-            selected_row["Pocket depth (mean)"],
-
-            selected_row["Curvature"]
-        ]
-    })
-
-    st.bar_chart(
-        interaction_df.set_index(
-            "Feature"
-        )
-    )
-
-    # =============================================
-    # PREDICTION SUMMARY
-    # =============================================
-
-    st.subheader(
-        "Prediction Summary"
-    )
-
-    m1, m2, m3 = st.columns(3)
-
-    with m1:
-
-        st.metric(
-
-            "Interaction Probability",
-
-            round(
-                selected_row[
-                    "Interaction Probability"
+                    "Curvature"
                 ],
-                4
+
+                "Score": [
+
+                    selected_row["Contact Density"],
+
+                    selected_row["Electrostatic Score"],
+
+                    selected_row["Hbond Strength"],
+
+                    selected_row["Pi-stacking energy"],
+
+                    selected_row["Pocket depth (mean)"],
+
+                    selected_row["Curvature"]
+                ]
+            })
+
+            st.bar_chart(
+                interaction_df.set_index(
+                    "Feature"
+                )
             )
-        )
 
-    with m2:
+            # =============================================
+            # PREDICTION SUMMARY
+            # =============================================
 
-        st.metric(
-
-            "RNALigVS Score",
-
-            round(
-                selected_row[
-                    "RNALigVS Score"
-                ],
-                4
+            st.subheader(
+                "Prediction Summary"
             )
-        )
 
-    with m3:
+            m1, m2, m3 = st.columns(3)
 
-        conf = confidence_label(
+            with m1:
 
-            selected_row[
-                "Interaction Probability"
-            ]
-        )
+                st.metric(
 
-        st.metric(
-            "Confidence",
-            conf
-        )
+                    "Interaction Probability",
 
-    # =============================================
-    # INTERPRETATION
-    # =============================================
+                    round(
+                        selected_row[
+                            "Interaction Probability"
+                        ],
+                        4
+                    )
+                )
 
-    st.subheader(
-        "Scientific Interpretation"
-    )
+            with m2:
 
-    if conf == "High":
+                st.metric(
 
-        st.success("""
+                    "RNALigVS Score",
+
+                    round(
+                        selected_row[
+                            "RNALigVS Score"
+                        ],
+                        4
+                    )
+                )
+
+            with m3:
+
+                conf = confidence_label(
+
+                    selected_row[
+                        "Interaction Probability"
+                    ]
+                )
+
+                st.metric(
+                    "Confidence",
+                    conf
+                )
+
+            # =============================================
+            # INTERPRETATION
+            # =============================================
+
+            st.subheader(
+                "Scientific Interpretation"
+            )
+
+            if conf == "High":
+
+                st.success("""
 This ligand demonstrates strong
 RNA-binding compatibility based on
 electrostatic complementarity,
@@ -1161,17 +1161,17 @@ contact density, and π-stacking
 interaction potential.
 """)
 
-    elif conf == "Medium":
+            elif conf == "Medium":
 
-        st.warning("""
+                st.warning("""
 This ligand shows moderate RNA
 interaction capability and may
 require further optimization.
 """)
 
-    else:
+            else:
 
-        st.error("""
+                st.error("""
 This ligand demonstrates weak
 interaction probability under
 current scoring conditions.
