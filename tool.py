@@ -1,5 +1,6 @@
 # =========================================================
-# RNALigVS FINAL WORKING STREAMLIT SERVER
+# RNALigVS FINAL FULLY WORKING STREAMLIT APP
+# STREAMLIT CLOUD STABLE VERSION
 # =========================================================
 
 import os
@@ -15,7 +16,6 @@ import py3Dmol
 from rdkit import Chem
 from rdkit.Chem import Descriptors
 from rdkit.Chem import rdMolDescriptors
-from rdkit.Chem.Draw import MolToImage
 
 from Bio.PDB import (
     PDBParser,
@@ -371,21 +371,6 @@ def lipinski(smiles):
     }
 
 # =========================================================
-# 2D STRUCTURE
-# =========================================================
-
-def molecule_image(smiles):
-
-    mol = Chem.MolFromSmiles(smiles)
-
-    img = MolToImage(
-        mol,
-        size=(400, 400)
-    )
-
-    return img
-
-# =========================================================
 # VISUALIZATION
 # =========================================================
 
@@ -525,7 +510,7 @@ if page == "🏠 Home":
         RNALigVS is a docking-free, physics-informed
         virtual screening framework for identifying
         RNA-targeting small molecules.
-        """)
+        """, unsafe_allow_html=True)
 
 # =========================================================
 # RUN PREDICTION PAGE
@@ -795,10 +780,6 @@ elif page == "🚀 Run Prediction":
                 result_df["SMILES"]
             )
 
-            mol_img = molecule_image(
-                selected_smiles
-            )
-
             lip = lipinski(
                 selected_smiles
             )
@@ -807,9 +788,12 @@ elif page == "🚀 Run Prediction":
 
             with col1:
 
-                st.image(
-                    mol_img,
-                    caption="2D Structure"
+                st.subheader(
+                    "Selected SMILES"
+                )
+
+                st.code(
+                    selected_smiles
                 )
 
             with col2:
@@ -861,6 +845,5 @@ elif page == "📘 Tutorial":
     - Interaction probability
     - RNA pocket visualization
     - Lipinski analysis
-    - 2D molecular structure visualization
 
     """)
