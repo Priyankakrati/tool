@@ -34,10 +34,49 @@ from utils_scientific import tanimoto
 
 st.set_page_config(
     page_title="RNALigVS",
-    page_icon="🧬",
+    page_icon="",
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# =========================================================
+# HIDE STREAMLIT HEADER + TOOLBAR
+# =========================================================
+
+st.markdown("""
+
+<style>
+
+/* Hide top toolbar */
+[data-testid="stToolbar"] {
+    visibility: hidden;
+    height: 0%;
+    position: fixed;
+}
+
+/* Hide hamburger menu */
+#MainMenu {
+    visibility: hidden;
+}
+
+/* Hide footer */
+footer {
+    visibility: hidden;
+}
+
+/* Hide header */
+header {
+    visibility: hidden;
+}
+
+/* Remove top padding */
+.block-container {
+    padding-top: 1rem;
+}
+
+</style>
+
+""", unsafe_allow_html=True)
 
 # =========================================================
 # CUSTOM CSS
