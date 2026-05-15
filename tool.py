@@ -1,6 +1,6 @@
 # =========================================================
 # RNALigVS FINAL STREAMLIT APP
-# ERROR-FREE FINAL VERSION
+# FINAL ERROR-FREE VERSION
 # =========================================================
 
 import os
@@ -406,13 +406,20 @@ def compute_features(
     )
 
 # =========================================================
+# SAFE PREDICTION
+# =========================================================
 
 def predict_probability(features):
 
-    score = sum(
-        weights[f] * features[f]
-        for f in weights
-    )
+    score = 0
+
+    for f in weights:
+
+        if f in features:
+
+            score += (
+                weights[f] * features[f]
+            )
 
     z = (
         score - mean
@@ -511,10 +518,6 @@ if page == "🏠 Home":
 
     st.divider()
 
-    # =====================================
-    # METRICS
-    # =====================================
-
     c1, c2, c3 = st.columns(3)
 
     with c1:
@@ -566,7 +569,7 @@ if page == "🏠 Home":
     """, unsafe_allow_html=True)
 
 # =========================================================
-# RUN PREDICTION PAGE
+# RUN PREDICTION
 # =========================================================
 
 elif page == "🚀 Run Prediction":
@@ -612,10 +615,6 @@ elif page == "🚀 Run Prediction":
                 features
             )
 
-            # =================================
-            # RESULTS
-            # =================================
-
             st.subheader(
                 "Binding Probability"
             )
@@ -624,10 +623,6 @@ elif page == "🚀 Run Prediction":
                 "RNALigVS Score",
                 f"{prob:.4f}"
             )
-
-            # =================================
-            # FEATURES
-            # =================================
 
             st.subheader(
                 "Extracted Features"
@@ -641,10 +636,6 @@ elif page == "🚀 Run Prediction":
                 feat_df,
                 use_container_width=True
             )
-
-            # =================================
-            # STRUCTURE
-            # =================================
 
             st.subheader(
                 "RNA Binding Pocket"
