@@ -874,4 +874,3 @@ elif page == "📘 Tutorial":
     - 2D molecular structure visualization
 
     """)
-```
