@@ -831,9 +831,9 @@ elif page == "Run Prediction":
 
         results = []
 
-        progress = st.progress(0)
+        ##progress = st.progress(0)
 
-        total = len(smiles_list)
+        ##total = len(smiles_list)
 
         for idx, smiles in enumerate(smiles_list):
 
@@ -887,7 +887,7 @@ elif page == "Run Prediction":
                 (idx + 1) / total
             )
 
-        # =================================================
+# =================================================
 # RESULTS
 # =================================================
 
