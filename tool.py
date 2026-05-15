@@ -888,267 +888,272 @@ elif page == "Run Prediction":
             )
 
         # =================================================
-        # RESULTS
-        # =================================================
-
-        if len(results) == 0:
-
-            st.error(
-                "No valid ligands processed!"
-            )
-
-        else:
-
-            result_df = pd.DataFrame(results)
-
-            result_df = result_df.sort_values(
-
-                "Interaction Probability",
-
-                ascending=False
-            )
-
-            result_df["Rank"] = range(
-                1,
-                len(result_df) + 1
-            )
-
-            st.success(
-                "Virtual screening completed!"
-            )
-
-            st.subheader(
-                "Predicted Ligands"
-            )
-
-            st.dataframe(
-                result_df,
-                use_container_width=True
-            )
-
-# =============================================
-# DOWNLOAD
-# =============================================
-
-csv = result_df.to_csv(
-    index=False
-).encode("utf-8")
-
-st.download_button(
-
-    label="Download Results CSV",
-
-    data=csv,
-
-    file_name="RNALigVS_results.csv",
-
-    mime="text/csv"
-)
-
-# =============================================
-# LIGAND ANALYSIS
-# =============================================
-
-st.header(
-    "Selected Ligand Analysis"
-)
-
-selected_smiles = st.selectbox(
-
-    "Select SMILES",
-
-    result_df["SMILES"],
-
-    key="ligand_selector"
-)
-
-lip = lipinski(
-    selected_smiles
-)
-
-selected_row = result_df[
-    result_df["SMILES"] ==
-    selected_smiles
-].iloc[0]
-# =================================================
-# TOP PANELS
+# RESULTS
 # =================================================
 
-panel1, panel2 = st.columns(2)
+if len(results) == 0:
 
-# =================================================
-# LEFT PANEL
-# =================================================
-
-with panel1:
-
-    st.subheader(
-        "Ligand Selection"
+    st.error(
+        "No valid ligands processed!"
     )
 
-    st.code(
-        selected_smiles
-    )
+else:
 
     # =============================================
-    # 2D STRUCTURE
+    # CREATE DATAFRAME
     # =============================================
 
-    try:
+    result_df = pd.DataFrame(results)
 
-        from rdkit.Chem import Draw
-
-        mol = Chem.MolFromSmiles(
-            selected_smiles
-        )
-
-        if mol:
-
-            img = Draw.MolToImage(
-                mol,
-                size=(450,300)
-            )
-
-            st.image(
-                img,
-                use_container_width=True
-            )
-
-    except:
-
-        st.warning(
-            "2D structure rendering failed."
-        )
-
-# =================================================
-# RIGHT PANEL
-# =================================================
-
-with panel2:
-
-    st.subheader(
-        "Selected SMILES & Lipinski's Rule"
-    )
-
-    lip_df = pd.DataFrame(
-        [lip]
-    )
-
-    st.dataframe(
-        lip_df,
-        use_container_width=True
-    )
-
-# =================================================
-# INTERACTION PROFILE
-# =================================================
-
-st.subheader(
-    "Interaction Profile"
-)
-
-interaction_df = pd.DataFrame({
-
-    "Feature": [
-
-        "Contact Density",
-
-        "Electrostatic Score",
-
-        "Hbond Strength",
-
-        "Pi-stacking energy",
-
-        "Pocket depth",
-
-        "Curvature"
-    ],
-
-    "Score": [
-
-        selected_row["Contact Density"],
-
-        selected_row["Electrostatic Score"],
-
-        selected_row["Hbond Strength"],
-
-        selected_row["Pi-stacking energy"],
-
-        selected_row["Pocket depth (mean)"],
-
-        selected_row["Curvature"]
-    ]
-})
-
-st.bar_chart(
-    interaction_df.set_index(
-        "Feature"
-    )
-)
-
-# =================================================
-# PREDICTION SUMMARY
-# =================================================
-
-st.subheader(
-    "Prediction Summary"
-)
-
-m1, m2, m3 = st.columns(3)
-
-with m1:
-
-    st.metric(
+    result_df = result_df.sort_values(
 
         "Interaction Probability",
 
-        round(
+        ascending=False
+    )
+
+    result_df["Rank"] = range(
+        1,
+        len(result_df) + 1
+    )
+
+    # =============================================
+    # SHOW RESULTS
+    # =============================================
+
+    st.success(
+        "Virtual screening completed!"
+    )
+
+    st.subheader(
+        "Predicted Ligands"
+    )
+
+    st.dataframe(
+        result_df,
+        use_container_width=True
+    )
+
+    # =============================================
+    # DOWNLOAD
+    # =============================================
+
+    csv = result_df.to_csv(
+        index=False
+    ).encode("utf-8")
+
+    st.download_button(
+
+        label="Download Results CSV",
+
+        data=csv,
+
+        file_name="RNALigVS_results.csv",
+
+        mime="text/csv"
+    )
+
+    # =============================================
+    # LIGAND ANALYSIS
+    # =============================================
+
+    st.header(
+        "Selected Ligand Analysis"
+    )
+
+    selected_smiles = st.selectbox(
+
+        "Select SMILES",
+
+        result_df["SMILES"],
+
+        key="ligand_selector"
+    )
+
+    lip = lipinski(
+        selected_smiles
+    )
+
+    selected_row = result_df[
+        result_df["SMILES"] ==
+        selected_smiles
+    ].iloc[0]
+
+    # =============================================
+    # PANELS
+    # =============================================
+
+    panel1, panel2 = st.columns(2)
+
+    # =============================================
+    # LEFT PANEL
+    # =============================================
+
+    with panel1:
+
+        st.subheader(
+            "Ligand Selection"
+        )
+
+        st.code(
+            selected_smiles
+        )
+
+        try:
+
+            from rdkit.Chem import Draw
+
+            mol = Chem.MolFromSmiles(
+                selected_smiles
+            )
+
+            if mol:
+
+                img = Draw.MolToImage(
+                    mol,
+                    size=(450,300)
+                )
+
+                st.image(
+                    img,
+                    use_container_width=True
+                )
+
+        except:
+
+            st.warning(
+                "2D structure rendering failed."
+            )
+
+    # =============================================
+    # RIGHT PANEL
+    # =============================================
+
+    with panel2:
+
+        st.subheader(
+            "Lipinski's Rule"
+        )
+
+        lip_df = pd.DataFrame(
+            [lip]
+        )
+
+        st.dataframe(
+            lip_df,
+            use_container_width=True
+        )
+
+    # =============================================
+    # INTERACTION PROFILE
+    # =============================================
+
+    st.subheader(
+        "Interaction Profile"
+    )
+
+    interaction_df = pd.DataFrame({
+
+        "Feature": [
+
+            "Contact Density",
+
+            "Electrostatic Score",
+
+            "Hbond Strength",
+
+            "Pi-stacking energy",
+
+            "Pocket depth",
+
+            "Curvature"
+        ],
+
+        "Score": [
+
+            selected_row["Contact Density"],
+
+            selected_row["Electrostatic Score"],
+
+            selected_row["Hbond Strength"],
+
+            selected_row["Pi-stacking energy"],
+
+            selected_row["Pocket depth (mean)"],
+
+            selected_row["Curvature"]
+        ]
+    })
+
+    st.bar_chart(
+        interaction_df.set_index(
+            "Feature"
+        )
+    )
+
+    # =============================================
+    # PREDICTION SUMMARY
+    # =============================================
+
+    st.subheader(
+        "Prediction Summary"
+    )
+
+    m1, m2, m3 = st.columns(3)
+
+    with m1:
+
+        st.metric(
+
+            "Interaction Probability",
+
+            round(
+                selected_row[
+                    "Interaction Probability"
+                ],
+                4
+            )
+        )
+
+    with m2:
+
+        st.metric(
+
+            "RNALigVS Score",
+
+            round(
+                selected_row[
+                    "RNALigVS Score"
+                ],
+                4
+            )
+        )
+
+    with m3:
+
+        conf = confidence_label(
+
             selected_row[
                 "Interaction Probability"
-            ],
-            4
+            ]
         )
-    )
 
-with m2:
-
-    st.metric(
-
-        "RNALigVS Score",
-
-        round(
-            selected_row[
-                "RNALigVS Score"
-            ],
-            4
+        st.metric(
+            "Confidence",
+            conf
         )
+
+    # =============================================
+    # INTERPRETATION
+    # =============================================
+
+    st.subheader(
+        "Scientific Interpretation"
     )
 
-with m3:
+    if conf == "High":
 
-    conf = confidence_label(
-
-        selected_row[
-            "Interaction Probability"
-        ]
-    )
-
-    st.metric(
-        "Confidence",
-        conf
-    )
-
-# =================================================
-# SCIENTIFIC INTERPRETATION
-# =================================================
-
-st.subheader(
-    "Scientific Interpretation"
-)
-
-if conf == "High":
-
-    st.success("""
+        st.success("""
 This ligand demonstrates strong
 RNA-binding compatibility based on
 electrostatic complementarity,
@@ -1156,17 +1161,17 @@ contact density, and π-stacking
 interaction potential.
 """)
 
-elif conf == "Medium":
+    elif conf == "Medium":
 
-    st.warning("""
+        st.warning("""
 This ligand shows moderate RNA
 interaction capability and may
 require further optimization.
 """)
 
-else:
+    else:
 
-    st.error("""
+        st.error("""
 This ligand demonstrates weak
 interaction probability under
 current scoring conditions.
