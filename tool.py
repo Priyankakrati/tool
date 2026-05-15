@@ -944,9 +944,9 @@ elif page == "Run Prediction":
                 "RNALigVS_results.csv",
 
                 mime="text/csv"
-            )
 
-# =============================================
+
+        # =============================================
 # LIGAND ANALYSIS
 # =============================================
 
@@ -1017,6 +1017,7 @@ with panel1:
             )
 
     except:
+
         st.warning(
             "2D structure rendering failed."
         )
@@ -1172,39 +1173,5 @@ This ligand demonstrates weak
 interaction probability under
 current scoring conditions.
 """)
-# =========================================================
-# TUTORIAL PAGE
-# =========================================================
+            )
 
-elif page == "Tutorial":
-
-    st.header("RNALigVS Tutorial")
-
-    st.markdown("""
-
-    ### Step 1
-    Upload RNA structure in PDB format.
-
-    ### Step 2
-    Upload ligand library in TXT/CSV format.
-
-    ### Step 3
-    RNALigVS computes:
-    - Contact Density
-    - Electrostatic Score
-    - Hbond Strength
-    - π-stacking energy
-    - Pocket depth
-    - Curvature
-
-    ### Step 4
-    Final interaction probability is generated.
-
-    ### Output
-    - Ranked ligands
-    - RNALigVS score
-    - Interaction probability
-    - RNA pocket visualization
-    - Lipinski analysis
-
-    """)
