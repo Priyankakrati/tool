@@ -129,7 +129,14 @@ def compute_curvature(coords):
 # POCKET EXTRACTION
 # =========================================================
 
-def extract_pocket(pdb_path):
+# =========================================================
+# POCKET EXTRACTION
+# =========================================================
+
+def extract_pocket(
+    pdb_path,
+    cutoff=6.0
+):
 
     parser = PDBParser(QUIET=True)
 
@@ -140,41 +147,98 @@ def extract_pocket(pdb_path):
 
     rna_atoms = []
 
+    ligand_atoms = []
+
     phosphate_atoms = []
 
     oxygen_atoms = []
+
+    # =====================================================
+    # RNA + LIGAND SEPARATION
+    # =====================================================
 
     for model in structure:
 
         for chain in model:
 
-            for res in chain:
+            for residue in chain:
 
-                if res.get_resname().strip() in RNA_RES:
+                resname = residue.get_resname().strip()
 
-                    for atom in res.get_atoms():
+                # RNA residues
+                if resname in RNA_RES:
+
+                    for atom in residue:
 
                         rna_atoms.append(atom)
 
-                        atom_name = atom.get_name()
+                # Ligand residues
+                elif resname not in ["HOH", "WAT"]:
 
-                        if atom_name.startswith("P"):
-                            phosphate_atoms.append(atom)
+                    for atom in residue:
 
-                        if atom_name.startswith("O"):
-                            oxygen_atoms.append(atom)
+                        ligand_atoms.append(atom)
+
+    # =====================================================
+    # NEIGHBOR SEARCH
+    # =====================================================
+
+    ns = NeighborSearch(rna_atoms)
+
+    pocket_atoms = set()
+
+    for ligand_atom in ligand_atoms:
+
+        neighbors = ns.search(
+
+            ligand_atom.coord,
+
+            cutoff,
+
+            level="A"
+        )
+
+        for atom in neighbors:
+
+            pocket_atoms.add(atom)
+
+    pocket_atoms = list(pocket_atoms)
+
+    # =====================================================
+    # COORDS
+    # =====================================================
 
     coords = np.array(
-        [a.coord for a in rna_atoms]
+
+        [a.coord for a in pocket_atoms]
     )
+
+    # =====================================================
+    # PHOSPHATE + OXYGEN INSIDE POCKET ONLY
+    # =====================================================
+
+    for atom in pocket_atoms:
+
+        atom_name = atom.get_name()
+
+        if atom_name.startswith("P"):
+
+            phosphate_atoms.append(atom)
+
+        if atom_name.startswith("O"):
+
+            oxygen_atoms.append(atom)
 
     return (
-        rna_atoms,
+
+        pocket_atoms,
+
         coords,
+
         phosphate_atoms,
+
         oxygen_atoms
     )
-
 # =========================================================
 # FEATURE EXTRACTION
 # =========================================================
@@ -744,15 +808,29 @@ elif page == "Run Prediction":
             view._make_html(),
             height=700
         )
+        c1, c2, c3 = st.columns(3)
 
-        st.info(
+with c1:
 
-            f"Pocket atoms: {len(pocket_atoms)} | "
+    st.metric(
+        "Pocket Atoms",
+        len(pocket_atoms)
+    )
 
-            f"Phosphate atoms: {len(phosphate_atoms)} | "
+with c2:
 
-            f"Oxygen atoms: {len(oxygen_atoms)}"
-        )
+    st.metric(
+        "Phosphate Atoms",
+        len(phosphate_atoms)
+    )
+
+with c3:
+
+    st.metric(
+        "Oxygen Atoms",
+        len(oxygen_atoms)
+    )
+       
 
     # =====================================================
     # RUN SCREENING
