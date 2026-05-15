@@ -477,7 +477,7 @@ def show_structure(
 # HOME PAGE
 # =========================================================
 
-if page == "🏠 Home":
+if page == "Home":
 
     logo_path = "logo.png"
 
@@ -646,7 +646,7 @@ if page == "🏠 Home":
     st.markdown("""
     <div class='feature-card'>
 
-    <h2>🚀 Applications</h2>
+    <h2>Applications</h2>
 
     <ul style='font-size:17px; line-height:1.9;'>
 
@@ -690,20 +690,10 @@ if page == "🏠 Home":
     st.markdown("""
     <div class='feature-card'>
 
-    <h2>📈 RNALigVS Scoring Function</h2>
+    <h2>RNALigVS Scoring Function</h2>
 
     </div>
     """, unsafe_allow_html=True)
-
-    st.latex(r'''
-    Score =
-    0.35(Contact\ Density)
-    + 0.30(Electrostatic\ Score)
-    + 0.10(Hbond\ Strength)
-    + 0.10(\pi\text{-}stacking)
-    + 0.10(Pocket\ Depth)
-    + 0.05(Curvature)
-    ''')
 
 # =========================================================
 # RUN PREDICTION PAGE
