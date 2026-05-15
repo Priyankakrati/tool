@@ -926,26 +926,26 @@ elif page == "Run Prediction":
                 use_container_width=True
             )
 
-            # =============================================
-            # DOWNLOAD
-            # =============================================
+# =============================================
+# DOWNLOAD
+# =============================================
 
-            csv = result_df.to_csv(
-                index=False
-            ).encode("utf-8")
+csv = result_df.to_csv(
+    index=False
+).encode("utf-8")
 
-            st.download_button(
+st.download_button(
 
-                label="Download Results CSV",
+    label="Download Results CSV",
 
-                data=csv,
+    data=csv,
 
-                file_name=
-                "RNALigVS_results.csv",
+    file_name="RNALigVS_results.csv",
 
-                mime="text/csv"
+    mime="text/csv"
+)
 
-                  # =============================================
+# =============================================
 # LIGAND ANALYSIS
 # =============================================
 
@@ -970,7 +970,6 @@ selected_row = result_df[
     result_df["SMILES"] ==
     selected_smiles
 ].iloc[0]
-
 # =================================================
 # TOP PANELS
 # =================================================
