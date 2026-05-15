@@ -889,141 +889,258 @@ elif page == "Run Prediction":
             )
 
         # =================================================
-        # RESULTS
-        # =================================================
+# RESULTS
+# =================================================
 
-        if len(results) == 0:
+if len(results) == 0:
 
-            st.error(
-                "No valid ligands processed!"
-            )
+    st.error(
+        "No valid ligands processed!"
+    )
 
-        else:
+else:
 
-            result_df = pd.DataFrame(results)
+    result_df = pd.DataFrame(results)
 
-            result_df = result_df.sort_values(
+    result_df = result_df.sort_values(
 
-                "Interaction Probability",
+        "Interaction Probability",
 
-                ascending=False
-            )
+        ascending=False
+    )
 
-            result_df["Rank"] = range(
-                1,
-                len(result_df) + 1
-            )
+    result_df["Rank"] = range(
+        1,
+        len(result_df) + 1
+    )
 
-            st.success(
-                "Virtual screening completed!"
-            )
+    # =============================================
+    # SAVE RESULTS IN SESSION
+    # =============================================
+
+    st.session_state["result_df"] = result_df
+
+    st.session_state["screening_complete"] = True
+
+    st.session_state["pdb_path"] = pdb_path
+
+    st.session_state["pocket_coords"] = pocket_coords
+
+    st.session_state["phosphate_atoms"] = phosphate_atoms
+
+    st.session_state["oxygen_atoms"] = oxygen_atoms
+
+
+# =====================================================
+# DISPLAY SAVED RESULTS
+# =====================================================
+
+if st.session_state.get(
+    "screening_complete",
+    False
+):
+
+    result_df = st.session_state[
+        "result_df"
+    ]
+
+    st.success(
+        "Virtual screening completed!"
+    )
+
+    # =================================================
+    # FILTER
+    # =================================================
+
+    min_prob = st.slider(
+
+        "Minimum Interaction Probability",
+
+        0.0,
+
+        1.0,
+
+        0.5,
+
+        0.01,
+
+        key="prob_filter"
+    )
+
+    filtered_df = result_df[
+
+        result_df[
+            "Interaction Probability"
+        ] >= min_prob
+    ]
+
+    st.subheader(
+        "Predicted Ligands"
+    )
+
+    st.dataframe(
+        filtered_df,
+        use_container_width=True
+    )
+
+    # =================================================
+    # DOWNLOAD
+    # =================================================
+
+    csv = filtered_df.to_csv(
+        index=False
+    ).encode("utf-8")
+
+    st.download_button(
+
+        label="Download Results CSV",
+
+        data=csv,
+
+        file_name="RNALigVS_results.csv",
+
+        mime="text/csv"
+    )
+
+    # =================================================
+    # SELECT LIGAND
+    # =================================================
+
+    st.subheader(
+        "Ligand Analysis"
+    )
+
+    smiles_options = filtered_df[
+        "SMILES"
+    ].tolist()
+
+    if len(smiles_options) == 0:
+
+        st.warning(
+            "No ligands above selected probability threshold."
+        )
+
+    else:
+
+        if "selected_smiles" not in st.session_state:
+
+            st.session_state[
+                "selected_smiles"
+            ] = smiles_options[0]
+
+        selected_smiles = st.selectbox(
+
+            "Select SMILES",
+
+            smiles_options,
+
+            index=smiles_options.index(
+
+                st.session_state[
+                    "selected_smiles"
+                ]
+
+            ) if st.session_state[
+                "selected_smiles"
+            ] in smiles_options else 0,
+
+            key="smiles_selector"
+        )
+
+        st.session_state[
+            "selected_smiles"
+        ] = selected_smiles
+
+        # =============================================
+        # LIPINSKI
+        # =============================================
+
+        lip = lipinski(
+            selected_smiles
+        )
+
+        col1, col2 = st.columns([1,1])
+
+        with col1:
 
             st.subheader(
-                "Predicted Ligands"
+                "Selected SMILES"
             )
 
-            st.dataframe(
-                result_df,
-                use_container_width=True
-            )
-
-            # =============================================
-            # DOWNLOAD
-            # =============================================
-
-            csv = result_df.to_csv(
-                index=False
-            ).encode("utf-8")
-
-            st.download_button(
-
-                label="Download Results CSV",
-
-                data=csv,
-
-                file_name=
-                "RNALigVS_results.csv",
-
-                mime="text/csv"
-            )
-
-            # =============================================
-            # LIGAND ANALYSIS
-            # =============================================
-
-            st.subheader(
-                "Ligand Analysis"
-            )
-
-            selected_smiles = st.selectbox(
-                "Select SMILES",
-                result_df["SMILES"]
-            )
-
-            lip = lipinski(
+            st.code(
                 selected_smiles
             )
 
-            col1, col2 = st.columns([1,1])
+        with col2:
 
-            with col1:
+            st.subheader(
+                "Lipinski's Rule"
+            )
 
-                st.subheader(
-                    "Selected SMILES"
-                )
+            lip_df = pd.DataFrame(
+                [lip]
+            )
 
-                st.code(
-                    selected_smiles
-                )
+            st.dataframe(
+                lip_df,
+                use_container_width=True
+            )
 
-            with col2:
+        # =============================================
+        # INTERACTION PROFILE
+        # =============================================
 
-                st.subheader(
-                    "Lipinski's Rule"
-                )
+        selected_row = filtered_df[
 
-                lip_df = pd.DataFrame(
-                    [lip]
-                )
+            filtered_df["SMILES"]
+            ==
+            selected_smiles
 
-                st.dataframe(
-                    lip_df,
-                    use_container_width=True
-                )
+        ].iloc[0]
 
-# =========================================================
-# TUTORIAL PAGE
-# =========================================================
+        interaction_features = {
 
-elif page == "Tutorial":
+            "Contact Density":
+                selected_row["Contact Density"],
 
-    st.header("RNALigVS Tutorial")
+            "Electrostatic Score":
+                selected_row["Electrostatic Score"],
 
-    st.markdown("""
+            "Hbond Strength":
+                selected_row["Hbond Strength"],
 
-    ### Step 1
-    Upload RNA structure in PDB format.
+            "Pi-stacking energy":
+                selected_row["Pi-stacking energy"]
+        }
 
-    ### Step 2
-    Upload ligand library in TXT/CSV format.
+        interaction_df = interaction_summary(
+            interaction_features
+        )
 
-    ### Step 3
-    RNALigVS computes:
-    - Contact Density
-    - Electrostatic Score
-    - Hbond Strength
-    - π-stacking energy
-    - Pocket depth
-    - Curvature
+        st.subheader(
+            "RNA–Ligand Interaction Profile"
+        )
 
-    ### Step 4
-    Final interaction probability is generated.
+        st.dataframe(
+            interaction_df,
+            use_container_width=True
+        )
 
-    ### Output
-    - Ranked ligands
-    - RNALigVS score
-    - Interaction probability
-    - RNA pocket visualization
-    - Lipinski analysis
+        # =============================================
+        # CONFIDENCE
+        # =============================================
 
-    """)
+        conf = confidence_label(
+
+            selected_row[
+                "Interaction Probability"
+            ]
+        )
+
+        st.subheader(
+            "Prediction Confidence"
+        )
+
+        st.info(
+            f"{conf} Confidence Interaction"
+        )
