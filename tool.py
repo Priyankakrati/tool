@@ -1171,9 +1171,3 @@ This ligand demonstrates weak
 interaction probability under
 current scoring conditions.
 """)
-            )
-
-
-
-
-      
