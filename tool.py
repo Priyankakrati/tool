@@ -1,6 +1,9 @@
+# RNALigVS Advanced Streamlit Application
+
+```python
 # =========================================================
-# RNALigVS FINAL STREAMLIT SERVER
-# CLEAN SCIENTIFIC FINAL VERSION
+# RNALigVS ADVANCED STREAMLIT SERVER
+# FINAL INTERACTIVE VERSION
 # =========================================================
 
 import os
@@ -16,6 +19,7 @@ import py3Dmol
 from rdkit import Chem
 from rdkit.Chem import Descriptors
 from rdkit.Chem import rdMolDescriptors
+from rdkit.Chem import Draw
 
 from Bio.PDB import (
     PDBParser,
@@ -96,9 +100,9 @@ st.sidebar.markdown(
 page = st.sidebar.radio(
     "Navigation",
     [
-        "Home",
-        "Run Prediction",
-        "Tutorial"
+        "🏠 Home",
+        "🚀 Run Prediction",
+        "📘 Tutorial"
     ]
 )
 
@@ -134,6 +138,10 @@ def extract_pocket(pdb_path):
 
     rna_atoms = []
 
+    phosphate_atoms = []
+
+    oxygen_atoms = []
+
     for model in structure:
 
         for chain in model:
@@ -142,15 +150,28 @@ def extract_pocket(pdb_path):
 
                 if res.get_resname().strip() in RNA_RES:
 
-                    rna_atoms.extend(
-                        list(res.get_atoms())
-                    )
+                    for atom in res.get_atoms():
+
+                        rna_atoms.append(atom)
+
+                        atom_name = atom.get_name()
+
+                        if atom_name.startswith("P"):
+                            phosphate_atoms.append(atom)
+
+                        if atom_name.startswith("O"):
+                            oxygen_atoms.append(atom)
 
     coords = np.array(
         [a.coord for a in rna_atoms]
     )
 
-    return rna_atoms, coords
+    return (
+        rna_atoms,
+        coords,
+        phosphate_atoms,
+        oxygen_atoms
+    )
 
 # =========================================================
 # FEATURE EXTRACTION
@@ -161,7 +182,12 @@ def compute_features(
     smiles
 ):
 
-    pocket_atoms, pocket_coords = extract_pocket(
+    (
+        pocket_atoms,
+        pocket_coords,
+        phosphate_atoms,
+        oxygen_atoms
+    ) = extract_pocket(
         pdb_path
     )
 
@@ -196,10 +222,9 @@ def compute_features(
         if a.get_name()[0] in ["C", "N"]
     )
 
-    phosphate_atoms = sum(
-        1 for a in pocket_atoms
-        if a.get_name().startswith("P")
-    )
+    phosphate_count = len(phosphate_atoms)
+
+    oxygen_count = len(oxygen_atoms)
 
     pocket_depth_mean = np.mean(
         np.linalg.norm(
@@ -227,7 +252,7 @@ def compute_features(
         (
             abs(formal_charge)
             + h_acceptors
-            + phosphate_atoms * 0.01
+            + phosphate_count * 0.01
         ) / 10,
         1
     )
@@ -236,6 +261,7 @@ def compute_features(
         (
             h_donors
             + h_acceptors
+            + oxygen_count * 0.001
         ) / 20,
         1
     )
@@ -281,7 +307,9 @@ def compute_features(
 
     return (
         features,
-        pocket_coords
+        pocket_coords,
+        phosphate_atoms,
+        oxygen_atoms
     )
 
 # =========================================================
@@ -322,12 +350,50 @@ def probability(score):
     return prob
 
 # =========================================================
+# LIPINSKI
+# =========================================================
+
+def lipinski(smiles):
+
+    mol = Chem.MolFromSmiles(smiles)
+
+    mw = Descriptors.MolWt(mol)
+
+    logp = Descriptors.MolLogP(mol)
+
+    hbd = rdMolDescriptors.CalcNumHBD(mol)
+
+    hba = rdMolDescriptors.CalcNumHBA(mol)
+
+    rot = rdMolDescriptors.CalcNumRotatableBonds(mol)
+
+    return {
+        "Molecular Weight": round(mw,2),
+        "LogP": round(logp,2),
+        "H-bond Donors": hbd,
+        "H-bond Acceptors": hba,
+        "Rotatable Bonds": rot
+    }
+
+# =========================================================
+# 2D STRUCTURE
+# =========================================================
+
+def molecule_image(smiles):
+
+    mol = Chem.MolFromSmiles(smiles)
+
+    return Draw.MolToImage(mol, size=(400,400))
+
+# =========================================================
 # VISUALIZATION
 # =========================================================
 
 def show_structure(
     pdb_path,
-    pocket_coords
+    pocket_coords,
+    phosphate_atoms,
+    oxygen_atoms
 ):
 
     with open(pdb_path) as f:
@@ -336,7 +402,7 @@ def show_structure(
 
     view = py3Dmol.view(
         width=950,
-        height=650
+        height=700
     )
 
     view.addModel(
@@ -344,6 +410,7 @@ def show_structure(
         "pdb"
     )
 
+    # RNA cartoon
     view.setStyle({
 
         "cartoon": {
@@ -352,6 +419,7 @@ def show_structure(
         }
     })
 
+    # Pocket radius spheres
     for c in pocket_coords:
 
         view.addSphere({
@@ -364,11 +432,43 @@ def show_structure(
 
             },
 
-            "radius": 0.35,
+            "radius": 0.4,
 
             "color": "red",
 
-            "opacity": 0.6
+            "opacity": 0.5
+        })
+
+    # Phosphate atoms
+    for atom in phosphate_atoms:
+
+        c = atom.coord
+
+        view.addSphere({
+            "center": {
+                "x": float(c[0]),
+                "y": float(c[1]),
+                "z": float(c[2])
+            },
+            "radius": 0.7,
+            "color": "orange",
+            "opacity": 0.9
+        })
+
+    # Oxygen atoms
+    for atom in oxygen_atoms:
+
+        c = atom.coord
+
+        view.addSphere({
+            "center": {
+                "x": float(c[0]),
+                "y": float(c[1]),
+                "z": float(c[2])
+            },
+            "radius": 0.5,
+            "color": "blue",
+            "opacity": 0.8
         })
 
     view.setBackgroundColor("white")
@@ -381,7 +481,7 @@ def show_structure(
 # HOME PAGE
 # =========================================================
 
-if page == "Home":
+if page == "🏠 Home":
 
     logo_path = "logo.png"
 
@@ -413,16 +513,9 @@ if page == "Home":
         st.markdown("""
         RNALigVS is a docking-free, physics-informed virtual screening framework
         developed for rapid identification of RNA-targeting small molecules.
-        The platform integrates RNA structural information with ligand
-        physicochemical descriptors to estimate RNA–ligand interaction
-        probability using an interpretable weighted scoring function.
         """)
 
     st.divider()
-
-    # =====================================================
-    # METRICS
-    # =====================================================
 
     c1, c2, c3 = st.columns(3)
 
@@ -430,11 +523,8 @@ if page == "Home":
 
         st.markdown("""
         <div class='metric-box'>
-
         <h5>Screening Strategy</h5>
-
         <h2>Docking-Free</h2>
-
         </div>
         """, unsafe_allow_html=True)
 
@@ -442,11 +532,8 @@ if page == "Home":
 
         st.markdown("""
         <div class='metric-box'>
-
         <h5>RNA Support</h5>
-
         <h2>✓</h2>
-
         </div>
         """, unsafe_allow_html=True)
 
@@ -454,105 +541,16 @@ if page == "Home":
 
         st.markdown("""
         <div class='metric-box'>
-
         <h5>Pocket Detection</h5>
-
         <h2>NeighborSearch</h2>
-
         </div>
         """, unsafe_allow_html=True)
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    # =====================================================
-    # ABOUT
-    # =====================================================
-
-    st.markdown("""
-    <div class='feature-card'>
-
-    <h2>
-    About RNALigVS
-    </h2>
-
-    <p style='font-size:17px;'>
-
-    RNA molecules are emerging therapeutic targets due to
-    their involvement in gene regulation, viral replication,
-    riboswitch signaling, and disease progression.
-
-    </p>
-
-    <p style='font-size:17px;'>
-
-    RNALigVS utilizes KD-tree accelerated NeighborSearch
-    pocket detection together with physics-informed
-    interaction descriptors for efficient RNA-focused
-    virtual screening.
-
-    </p>
-
-    <ul style='font-size:16px;'>
-
-    <li>Contact Density</li>
-
-    <li>Electrostatic Score</li>
-
-    <li>Hydrogen Bond Strength</li>
-
-    <li>π-Stacking Energy</li>
-
-    <li>Pocket Depth (Mean)</li>
-
-    <li>Pocket Curvature</li>
-
-    </ul>
-
-    <p style='font-size:17px;'>
-
-    The framework enables large-scale docking-free
-    ligand prioritization for RNA-targeted drug discovery.
-
-    </p>
-
-    </div>
-    """, unsafe_allow_html=True)
-
-    # =====================================================
-    # WORKFLOW
-    # =====================================================
-
-    st.markdown("""
-    <div class='feature-card'>
-
-    <h2>
-    RNALigVS Workflow
-    </h2>
-
-    <ol style='font-size:16px;'>
-
-    <li>Upload RNA structure (PDB)</li>
-
-    <li>Upload ligand library (TXT/CSV)</li>
-
-    <li>RNA pocket extraction using NeighborSearch</li>
-
-    <li>Ligand descriptor computation using RDKit</li>
-
-    <li>Physics-informed scoring</li>
-
-    <li>Binding probability prediction</li>
-
-    </ol>
-
-    </div>
-    """, unsafe_allow_html=True)
 
 # =========================================================
 # RUN PREDICTION PAGE
 # =========================================================
 
-elif page == "Run Prediction":
+elif page == "🚀 Run Prediction":
 
     st.header("RNA–Ligand Virtual Screening")
 
@@ -566,15 +564,11 @@ elif page == "Run Prediction":
         type=["txt", "csv"]
     )
 
-    run_button = st.button(
-        "Run Prediction"
-    )
+    # =====================================================
+    # PDB VISUALIZATION
+    # =====================================================
 
-    if (
-        uploaded_pdb and
-        uploaded_smiles and
-        run_button
-    ):
+    if uploaded_pdb:
 
         with tempfile.NamedTemporaryFile(
             delete=False,
@@ -584,6 +578,47 @@ elif page == "Run Prediction":
             tmp.write(uploaded_pdb.read())
 
             pdb_path = tmp.name
+
+        (
+            pocket_atoms,
+            pocket_coords,
+            phosphate_atoms,
+            oxygen_atoms
+        ) = extract_pocket(pdb_path)
+
+        st.subheader("RNA Binding Pocket")
+
+        view = show_structure(
+            pdb_path,
+            pocket_coords,
+            phosphate_atoms,
+            oxygen_atoms
+        )
+
+        components.html(
+            view._make_html(),
+            height=700
+        )
+
+        st.info(
+            f"Pocket Atoms: {len(pocket_atoms)} | "
+            f"Phosphate Atoms: {len(phosphate_atoms)} | "
+            f"Oxygen Atoms: {len(oxygen_atoms)}"
+        )
+
+    # =====================================================
+    # RUN SCREENING
+    # =====================================================
+
+    run_button = st.button(
+        "Run Prediction"
+    )
+
+    if (
+        uploaded_pdb and
+        uploaded_smiles and
+        run_button
+    ):
 
         st.success("RNA structure loaded!")
 
@@ -662,7 +697,12 @@ elif page == "Run Prediction":
                 if result is None:
                     continue
 
-                features, pocket_coords = result
+                (
+                    features,
+                    pocket_coords,
+                    phosphate_atoms,
+                    oxygen_atoms
+                ) = result
 
                 score = calculate_score(
                     features
@@ -736,6 +776,10 @@ elif page == "Run Prediction":
                 use_container_width=True
             )
 
+            # =============================================
+            # DOWNLOAD
+            # =============================================
+
             csv = result_df.to_csv(
                 index=False
             ).encode("utf-8")
@@ -753,28 +797,53 @@ elif page == "Run Prediction":
             )
 
             # =============================================
-            # VISUALIZATION
+            # SELECT SMILES
             # =============================================
 
-            st.subheader(
-                "RNA Binding Pocket"
+            st.subheader("Ligand Analysis")
+
+            selected_smiles = st.selectbox(
+                "Select SMILES",
+                result_df["SMILES"]
             )
 
-            view = show_structure(
-                pdb_path,
-                pocket_coords
+            mol_img = molecule_image(
+                selected_smiles
             )
 
-            components.html(
-                view._make_html(),
-                height=700
+            lip = lipinski(
+                selected_smiles
             )
+
+            col1, col2 = st.columns([1,1])
+
+            with col1:
+
+                st.image(
+                    mol_img,
+                    caption="2D Structure"
+                )
+
+            with col2:
+
+                st.subheader(
+                    "Lipinski's Rule"
+                )
+
+                lip_df = pd.DataFrame(
+                    [lip]
+                )
+
+                st.dataframe(
+                    lip_df,
+                    use_container_width=True
+                )
 
 # =========================================================
 # TUTORIAL PAGE
 # =========================================================
 
-elif page == "Tutorial":
+elif page == "📘 Tutorial":
 
     st.header("RNALigVS Tutorial")
 
@@ -803,5 +872,8 @@ elif page == "Tutorial":
     - RNALigVS score
     - Interaction probability
     - RNA pocket visualization
+    - Lipinski's rule analysis
+    - 2D molecular structure visualization
 
     """)
+```
