@@ -829,7 +829,7 @@ elif page == "Run Prediction":
         # SCREENING
         # =================================================
 
-        results = []
+results = []
 
         ##progress = st.progress(0)
 
