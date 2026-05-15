@@ -21,18 +21,13 @@ from Bio.PDB import (
     PDBParser,
     NeighborSearch
 )
-# =========================================================
-# SCIENTIFIC UTILITIES
-# =========================================================
 
-from utils_scientific import (
-    pocket_residue_table,
-    pocket_geometry,
-    confidence_label,
-    interaction_summary,
-    drug_likeness,
-    tanimoto
-)
+from utils_scientific import pocket_residue_table
+from utils_scientific import pocket_geometry
+from utils_scientific import confidence_label
+from utils_scientific import interaction_summary
+from utils_scientific import drug_likeness
+from utils_scientific import tanimoto
 # =========================================================
 # PAGE CONFIG
 # =========================================================
