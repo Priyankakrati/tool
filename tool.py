@@ -266,18 +266,42 @@ def compute_features(
 
     oxygen_count = len(oxygen_atoms)
 
-    pocket_depth_mean = np.mean(
+    # =====================================================
+    # POCKET DEPTH
+    # =====================================================
+    
+    pocket_center = np.mean(
+        pocket_coords,
+        axis=0
+    )
+    
+    pocket_radius = np.mean(
+    
         np.linalg.norm(
-            pocket_coords -
-            np.mean(pocket_coords, axis=0),
+            pocket_coords - pocket_center,
             axis=1
         )
     )
-
-    curvature = compute_curvature(
-        pocket_coords
+    
+    ligand_size = (
+        heavy_atoms
+        + aromatic_rings
+        + h_acceptors
     )
-
+    
+    pocket_depth_mean = (
+    
+        ligand_size
+        /
+        (pocket_radius + 1e-6)
+    )
+    
+    # NORMALIZATION
+    
+    pocket_depth_mean = min(
+        pocket_depth_mean / 5,
+        1
+    )
     # =====================================================
     # FINAL FEATURES
     # =====================================================
