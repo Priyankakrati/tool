@@ -306,12 +306,17 @@ def compute_features(
         1
     )
 
-    pi_stacking = min(
-        (
-            aromatic_rings
-            * aromatic_pocket
-        ) / 500,
-        1
+    aromatic_atoms = sum(
+    
+        atom.GetIsAromatic()
+    
+        for atom in mol.GetAtoms()
+    )
+    
+    total_atoms = mol.GetNumAtoms()
+    
+    pi_stacking = aromatic_atoms / (
+        total_atoms + 1e-6
     )
 
     pocket_depth_mean = min(
