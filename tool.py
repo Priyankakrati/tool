@@ -303,6 +303,13 @@ def compute_features(
         1
     )
     # =====================================================
+    # CURVATURE
+    # =====================================================
+    
+    curvature = compute_curvature(
+        pocket_coords
+    )
+    # =====================================================
     # FINAL FEATURES
     # =====================================================
 
@@ -341,11 +348,6 @@ def compute_features(
     
     pi_stacking = aromatic_atoms / (
         total_atoms + 1e-6
-    )
-
-    pocket_depth_mean = min(
-        pocket_depth_mean / 20,
-        1
     )
 
     curvature = min(
