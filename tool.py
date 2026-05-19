@@ -1238,3 +1238,150 @@ This ligand demonstrates weak
 interaction probability under
 current scoring conditions.
 """)
+
+# =========================================================
+# TUTORIAL PAGE
+# =========================================================
+
+elif page == "Tutorial":
+
+    st.title("RNALigVS Tutorial")
+
+    st.markdown("""
+    ## Welcome to RNALigVS
+
+    RNALigVS is an RNA–Ligand Virtual Screening platform
+    developed for rapid identification of RNA-targeting
+    small molecules using structure-guided interaction
+    descriptors.
+
+    ---
+    """)
+
+    st.header("Step 1 — Upload RNA Structure")
+
+    st.markdown("""
+    - Upload RNA structure in **PDB format**
+    - The structure should contain:
+        - RNA molecule
+        - Bound ligand (optional)
+    - Water molecules and ions are automatically ignored
+    """)
+
+    st.info("Supported format: .pdb")
+
+    # -----------------------------------------------------
+
+    st.header("Step 2 — Upload Ligand SMILES File")
+
+    st.markdown("""
+    Upload TXT or CSV file containing ligand SMILES.
+
+    Example TXT format:
+
+    ```text
+    CCO
+    CCN
+    c1ccccc1
+    ```
+
+    Example CSV format:
+
+    ```csv
+    SMILES
+    CCO
+    CCN
+    c1ccccc1
+    ```
+    """)
+
+    # -----------------------------------------------------
+
+    st.header("Step 3 — Run Prediction")
+
+    st.markdown("""
+    Click **Run Prediction** to:
+
+    - Detect RNA binding pocket
+    - Extract interaction descriptors
+    - Compute RNALigVS score
+    - Estimate interaction probability
+    - Rank ligands
+    """)
+
+    # -----------------------------------------------------
+
+    st.header("Interaction Features")
+
+    feature_df = pd.DataFrame({
+
+        "Feature": [
+            "Contact Density",
+            "Electrostatic Score",
+            "Hbond Strength",
+            "π-Stacking",
+            "Pocket Depth",
+            "Curvature"
+        ],
+
+        "Description": [
+
+            "Ligand-pocket atomic packing density",
+
+            "Electrostatic compatibility between RNA and ligand",
+
+            "Hydrogen bonding interaction strength",
+
+            "Aromatic interaction propensity",
+
+            "Ligand-adjusted pocket burial estimation",
+
+            "Local RNA pocket geometry"
+        ]
+    })
+
+    st.dataframe(
+        feature_df,
+        use_container_width=True
+    )
+
+    # -----------------------------------------------------
+
+    st.header("Output Interpretation")
+
+    st.markdown("""
+    ## Probability Score
+
+    | Probability | Interpretation |
+    |---|---|
+    | 0.80 – 1.00 | Strong interaction |
+    | 0.50 – 0.80 | Moderate interaction |
+    | < 0.50 | Weak interaction |
+
+    Higher RNALigVS score indicates higher RNA–ligand
+    interaction likelihood.
+    """)
+
+    # -----------------------------------------------------
+
+    st.header("Webserver Components")
+
+    st.markdown("""
+    RNALigVS integrates:
+
+    - Streamlit
+    - Biopython
+    - RDKit
+    - NumPy
+    - Pandas
+    - py3Dmol
+
+    for RNA structure parsing, feature extraction,
+    molecular visualization, and ligand analysis.
+    """)
+
+    # -----------------------------------------------------
+
+    st.success(
+        "RNALigVS tutorial loaded successfully!"
+    )
