@@ -1379,9 +1379,3 @@ elif page == "Tutorial":
     for RNA structure parsing, feature extraction,
     molecular visualization, and ligand analysis.
     """)
-
-    # -----------------------------------------------------
-
-    st.success(
-        "RNALigVS tutorial loaded successfully!"
-    )
