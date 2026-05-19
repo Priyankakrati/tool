@@ -1264,7 +1264,7 @@ elif page == "Tutorial":
     - Upload RNA structure in **PDB format**
     - The structure should contain:
         - RNA molecule
-        - Bound ligand (optional)
+        - Bound ligand
     - Water molecules and ions are automatically ignored
     """)
 
