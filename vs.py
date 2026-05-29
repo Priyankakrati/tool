@@ -484,101 +484,27 @@ def show_structure(
             "color": "spectrum"
         }
     })
-        # =====================================================
-    # GET ONLY POCKET RESIDUES
+      # =====================================================
+    # SHOW ONLY LOCAL POCKET ATOMS
     # =====================================================
     
-    pocket_residues = []
+    for coord in pocket_coords:
     
-    for atom in pocket_atoms:
-    
-        try:
-    
-            residue = atom.get_parent()
-    
-            chain_id = residue.get_parent().id
-    
-            resi = residue.id[1]
-    
-            pocket_residues.append({
-    
-                "chain": chain_id,
-    
-                "resi": resi
-            })
-    
-        except:
-            pass
-    
-    # Pocket spheres
-    for c in pocket_coords:
-
         view.addSphere({
-
+    
             "center": {
-
-                "x": float(c[0]),
-                "y": float(c[1]),
-                "z": float(c[2])
-
+    
+                "x": float(coord[0]),
+                "y": float(coord[1]),
+                "z": float(coord[2])
             },
-
-            "radius": 0.4,
-
-            "color": "red",
-
-            "opacity": 0.5
-        })
-
-    # Phosphate atoms
-    for atom in phosphate_atoms:
-
-        c = atom.coord
-
-        view.addSphere({
-
-            "center": {
-
-                "x": float(c[0]),
-                "y": float(c[1]),
-                "z": float(c[2])
-
-            },
-
-            "radius": 0.7,
-
-            "color": "orange",
-
-            "opacity": 0.9
-        })
-
-    # Oxygen atoms
-    for atom in oxygen_atoms:
-
-        c = atom.coord
-
-        view.addSphere({
-
-            "center": {
-
-                "x": float(c[0]),
-                "y": float(c[1]),
-                "z": float(c[2])
-
-            },
-
-            "radius": 0.5,
-
-            "color": "blue",
-
-            "opacity": 0.8
-        })
-
-    view.setBackgroundColor("white")
-
-    view.zoomTo()
-
-    return view
+    
+            "radius": 0.45,
+    
+            "color": "cyan",
+    
+            "alpha": 0.75
+        })     
 
 # =========================================================
 # HOME PAGE
