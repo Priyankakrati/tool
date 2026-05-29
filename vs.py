@@ -39,10 +39,6 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# =========================================================
-# HIDE STREAMLIT HEADER + TOOLBAR
-# =========================================================
-
 st.markdown("""
 
 <style>
@@ -74,9 +70,10 @@ header {
     padding-top: 1rem;
 }
 
-/* Disable sidebar collapse button */
-[data-testid="collapsedControl"] {
-    display: none;
+/* Keep sidebar permanently visible */
+section[data-testid="stSidebar"] {
+    min-width: 260px !important;
+    max-width: 260px !important;
 }
 
 </style>
