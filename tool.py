@@ -517,6 +517,28 @@ def show_structure(
         {"model": -1},
         {"cartoon": {"color": "spectrum"}}
     )
+       # =====================================================
+    # SHOW LIGAND
+    # =====================================================
+    
+    view.setStyle(
+    
+        {
+    
+            "hetflag": True
+    
+        },
+    
+        {
+    
+            "stick": {
+    
+                "colorscheme": "yellowCarbon",
+                "radius": 0.25
+            }
+        }
+    )
+    
     # =====================================================
     # GET POCKET RESIDUES
     # =====================================================
@@ -529,34 +551,95 @@ def show_structure(
     
             residue = atom.get_parent()
     
+            chain = residue.get_parent().id
+    
             resi = residue.id[1]
     
-            if resi not in pocket_residues:
+            pocket_residues.append({
     
-                pocket_residues.append(resi)
+                "chain": chain,
+    
+                "resi": str(resi)
+            })
     
         except:
             pass
-
+    
     # =====================================================
-    # POCKET SURFACE
+    # LOCAL POCKET SURFACE
     # =====================================================
     
-    view.addSurface(
+    for res in pocket_residues:
     
-        py3Dmol.VDW,
+        view.addSurface(
     
-        {
+            py3Dmol.VDW,
     
-            "opacity": 0.70,
-            "color": "cyan"
-        },
+            {
     
-        {
+                "opacity": 0.45,
+                "color": "cyan"
+            },
     
-            "resi": pocket_residues
-        }
-    )
+            {
+    
+                "chain": res["chain"],
+                "resi": res["resi"]
+            }
+        )
+            # =====================================================
+    # POCKET RESIDUE LABELS
+    # =====================================================
+    
+    shown_labels = set()
+    
+    for atom in pocket_atoms:
+    
+        try:
+    
+            residue = atom.get_parent()
+    
+            chain = residue.get_parent().id
+    
+            resi = residue.id[1]
+    
+            resname = residue.get_resname()
+    
+            label = f"{chain}:{resname}{resi}"
+    
+            # avoid duplicate labels
+            if label in shown_labels:
+                continue
+    
+            shown_labels.add(label)
+    
+            coord = atom.coord
+    
+            view.addLabel(
+    
+                label,
+    
+                {
+    
+                    "position": {
+    
+                        "x": float(coord[0]),
+                        "y": float(coord[1]),
+                        "z": float(coord[2])
+                    },
+    
+                    "backgroundColor": "white",
+    
+                    "fontColor": "black",
+    
+                    "fontSize": 10,
+    
+                    "showBackground": True
+                }
+            )
+    
+        except:
+            pass
     # =====================================================
     # ZOOM TO POCKET
     # =====================================================
