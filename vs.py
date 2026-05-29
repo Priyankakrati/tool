@@ -497,7 +497,8 @@ def show_structure(
     pdb_path,
     pocket_coords,
     phosphate_atoms,
-    oxygen_atoms
+    oxygen_atoms,
+    show_surface=True
 ):
 
     # =====================================================
