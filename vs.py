@@ -595,8 +595,8 @@ def show_structure(
             pass
 
       
-    # =====================================================
-    # POCKET RESIDUE LABELS
+        # =====================================================
+    # CLEAN POCKET LABELS
     # =====================================================
     
     shown_labels = set()
@@ -611,20 +611,11 @@ def show_structure(
     
             resi = residue.id[1]
     
-            resname = residue.get_resname()
+            atom_name = atom.get_name()
     
             coord = atom.coord
     
-            label = (
-    
-                f"{chain}:{resname}{resi}\n"
-    
-                f"({coord[0]:.1f}, "
-    
-                f"{coord[1]:.1f}, "
-    
-                f"{coord[2]:.1f})"
-            )
+            label = f"{chain}:{atom_name}:{resi}"
     
             if label in shown_labels:
                 continue
@@ -648,7 +639,7 @@ def show_structure(
     
                     "fontColor": "black",
     
-                    "fontSize": 8,
+                    "fontSize": 7,
     
                     "showBackground": True
                 }
