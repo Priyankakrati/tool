@@ -584,6 +584,28 @@ def show_structure(
     
         except:
             pass
+            # =====================================================
+    # LOCAL POCKET SURFACE
+    # =====================================================
+    
+    for res in pocket_residues:
+    
+        view.addSurface(
+    
+            py3Dmol.VDW,
+    
+            {
+    
+                "opacity": 0.45,
+                "color": "cyan"
+            },
+    
+            {
+    
+                "chain": res["chain"],
+                "resi": res["resi"]
+            }
+        )
     # =====================================================
     # POCKET SURFACE
     # =====================================================
