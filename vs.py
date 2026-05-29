@@ -569,6 +569,7 @@ def show_structure(
     # =====================================================
     # LOCAL POCKET SURFACE
     # =====================================================
+if show_surface:
     
     for res in pocket_residues:
     
