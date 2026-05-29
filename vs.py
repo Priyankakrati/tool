@@ -856,42 +856,54 @@ elif page == "Run Prediction":
     
     st.subheader("Pocket Residue Information")
     
-    info_rows = []
-    
-    for atom in pocket_atoms[:25]:
-    
-        try:
-    
-            residue = atom.get_parent()
-    
-            chain = residue.get_parent().id
-    
-            resi = residue.id[1]
-    
-            coord = atom.coord
-    
-            info_rows.append({
-    
+    # =====================================================
+# FINAL UNIQUE POCKET RESIDUES
+# =====================================================
+
+unique_residues = {}
+
+for atom in pocket_atoms:
+
+    try:
+
+        residue = atom.get_parent()
+
+        chain = residue.get_parent().id
+
+        resi = residue.id[1]
+
+        key = (chain, resi)
+
+        if key not in unique_residues:
+
+            coord = residue["P"].coord \
+                if "P" in residue \
+                else atom.coord
+
+            unique_residues[key] = {
+
                 "Chain": chain,
-    
+
                 "Residue": resi,
-    
+
                 "X": round(float(coord[0]), 2),
-    
+
                 "Y": round(float(coord[1]), 2),
-    
+
                 "Z": round(float(coord[2]), 2)
-            })
-    
-        except:
-            pass
-    
-    info_df = pd.DataFrame(info_rows)
-    
-    st.dataframe(
-        info_df,
-        use_container_width=True
-    )
+            }
+
+    except:
+        pass
+
+# =====================================================
+# CREATE FINAL DATAFRAME
+# =====================================================
+
+info_df = pd.DataFrame(
+
+    list(unique_residues.values())
+)
 
     # =====================================================
     # RUN SCREENING
