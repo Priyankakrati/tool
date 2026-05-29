@@ -1023,6 +1023,7 @@ elif page == "Run Prediction":
        
         view = show_structure(
             pdb_path,
+            pocket_atoms,
             pocket_coords,
             phosphate_atoms,
             oxygen_atoms
