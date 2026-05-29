@@ -856,45 +856,45 @@ elif page == "Run Prediction":
     
     st.subheader("Pocket Residue Information")
     
+        # =====================================================
+    # FINAL UNIQUE POCKET RESIDUES
     # =====================================================
-# FINAL UNIQUE POCKET RESIDUES
-# =====================================================
-
-unique_residues = {}
-
-for atom in pocket_atoms:
-
-    try:
-
-        residue = atom.get_parent()
-
-        chain = residue.get_parent().id
-
-        resi = residue.id[1]
-
-        key = (chain, resi)
-
-        if key not in unique_residues:
-
-            coord = residue["P"].coord \
-                if "P" in residue \
-                else atom.coord
-
-            unique_residues[key] = {
-
-                "Chain": chain,
-
-                "Residue": resi,
-
-                "X": round(float(coord[0]), 2),
-
-                "Y": round(float(coord[1]), 2),
-
-                "Z": round(float(coord[2]), 2)
-            }
-
-    except:
-        pass
+    
+    unique_residues = {}
+    
+    for atom in pocket_atoms:
+    
+        try:
+    
+            residue = atom.get_parent()
+    
+            chain = residue.get_parent().id
+    
+            resi = residue.id[1]
+    
+            key = (chain, resi)
+    
+            if key not in unique_residues:
+    
+                coord = residue["P"].coord \
+                    if "P" in residue \
+                    else atom.coord
+    
+                unique_residues[key] = {
+    
+                    "Chain": chain,
+    
+                    "Residue": resi,
+    
+                    "X": round(float(coord[0]), 2),
+    
+                    "Y": round(float(coord[1]), 2),
+    
+                    "Z": round(float(coord[2]), 2)
+                }
+    
+        except:
+            pass
 
 # =====================================================
 # CREATE FINAL DATAFRAME
