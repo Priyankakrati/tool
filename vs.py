@@ -537,7 +537,32 @@ def show_structure(
             }
         }
     )
-
+    # =====================================================
+    # SHOW POCKET ATOMS
+    # =====================================================
+    
+    for atom in pocket_atoms:
+    
+        coord = atom.coord
+    
+        view.addSphere(
+    
+            {
+    
+                "center": {
+    
+                    "x": float(coord[0]),
+                    "y": float(coord[1]),
+                    "z": float(coord[2])
+                },
+    
+                "radius": 0.45,
+    
+                "color": "cyan",
+    
+                "opacity": 0.75
+            }
+        )
     # =====================================================
     # GET POCKET RESIDUES
     # =====================================================
@@ -567,28 +592,35 @@ def show_structure(
     # =====================================================
     # LOCAL POCKET SURFACE
     # =====================================================
-
+    
     if show_surface:
-
-        for res in pocket_residues:
-
-            view.addSurface(
-
-                py3Dmol.VDW,
-
-                {
-
-                    "opacity": 0.45,
-                    "color": "cyan"
-                },
-
-                {
-                    "model": -1,
-                    "chain": res["chain"],
-                    "resi": res["resi"]
-                }
-            )
-
+    
+        pocket_serials = []
+    
+        for atom in pocket_atoms:
+    
+            try:
+                pocket_serials.append(atom.serial_number)
+    
+            except:
+                pass
+    
+        view.addSurface(
+    
+            py3Dmol.VDW,
+    
+            {
+    
+                "opacity": 0.45,
+    
+                "color": "cyan"
+            },
+    
+            {
+    
+                "serial": pocket_serials
+            }
+        )
     # =====================================================
     # POCKET RESIDUE LABELS
     # =====================================================
