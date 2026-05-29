@@ -596,37 +596,37 @@ def show_structure(
             pass
 
     # =====================================================
-    # LOCAL POCKET SURFACE
+    # LOCAL POCKET REPRESENTATION
     # =====================================================
     
     if show_surface:
     
-        pocket_serials = []
+        for res in pocket_residues:
     
-        for atom in pocket_atoms:
+            view.setStyle(
     
-            try:
-                pocket_serials.append(atom.serial_number)
+                {
     
-            except:
-                pass
+                    "chain": res["chain"],
+                    "resi": res["resi"]
+                },
     
-        view.addSurface(
+                {
     
-            py3Dmol.VDW,
+                    "stick": {
     
-            {
+                        "colorscheme": "cyanCarbon",
+                        "radius": 0.20
+                    },
     
-                "opacity": 0.45,
+                    "sphere": {
     
-                "color": "cyan"
-            },
-    
-            {
-    
-                "serial": pocket_serials
-            }
-        )
+                        "color": "cyan",
+                        "radius": 0.35,
+                        "opacity": 0.55
+                    }
+                }
+            )
     # =====================================================
     # POCKET RESIDUE LABELS
     # =====================================================
