@@ -597,13 +597,7 @@ def show_structure(
     # =====================================================
     # LOCAL POCKET REPRESENTATION
     # =====================================================
-    
-    if show_surface:
-    
-        for res in pocket_residues:
-    
-            view.setStyle(
-    
+        
                 {
     
                     "chain": res["chain"],
@@ -629,54 +623,62 @@ def show_structure(
     # =====================================================
     # POCKET RESIDUE LABELS
     # =====================================================
-
+    
     shown_labels = set()
-
+    
     for atom in pocket_atoms:
-
+    
         try:
-
+    
             residue = atom.get_parent()
-
+    
             chain = residue.get_parent().id
-
+    
             resi = residue.id[1]
-
+    
             resname = residue.get_resname()
-
-            label = f"{chain}:{resname}{resi}"
-
-            # avoid duplicate labels
+    
+            coord = atom.coord
+    
+            label = (
+    
+                f"{chain}:{resname}{resi}\n"
+    
+                f"({coord[0]:.1f}, "
+    
+                f"{coord[1]:.1f}, "
+    
+                f"{coord[2]:.1f})"
+            )
+    
             if label in shown_labels:
                 continue
-
+    
             shown_labels.add(label)
-
-            coord = residue["P"].coord if "P" in residue else atom.coord 
-
+    
             view.addLabel(
-
+    
                 label,
-
+    
                 {
-
+    
                     "position": {
-
+    
                         "x": float(coord[0]),
                         "y": float(coord[1]),
                         "z": float(coord[2])
                     },
-
+    
                     "backgroundColor": "white",
-
+    
                     "fontColor": "black",
-
-                    "fontSize": 10,
-
+    
+                    "fontSize": 8,
+    
                     "showBackground": True
                 }
             )
-
+    
         except:
             pass
 
