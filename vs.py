@@ -485,21 +485,30 @@ def show_structure(
         }
     })
         # =====================================================
-    # CREATE POCKET SURFACE
+    # GET ONLY POCKET RESIDUES
     # =====================================================
     
-    pocket_serials = []
+    pocket_residues = []
     
     for atom in pocket_atoms:
     
         try:
-            pocket_serials.append(
-                atom.serial_number
-            )
+    
+            residue = atom.get_parent()
+    
+            chain_id = residue.get_parent().id
+    
+            resi = residue.id[1]
+    
+            pocket_residues.append({
+    
+                "chain": chain_id,
+    
+                "resi": resi
+            })
     
         except:
             pass
-    
     # =====================================================
     # ADD SURFACE
     # =====================================================
