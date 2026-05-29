@@ -509,24 +509,7 @@ def show_structure(
     
         except:
             pass
-    # =====================================================
-    # ADD SURFACE
-    # =====================================================
     
-    view.addSurface(
-    
-        py3Dmol.VDW,
-    
-        {
-            "opacity": 0.65,
-            "color": "cyan"
-        },
-    
-        {
-            "serial": pocket_serials
-        }
-    )
-
     # Pocket spheres
     for c in pocket_coords:
 
