@@ -517,8 +517,28 @@ def show_structure(
         {"model": -1},
         {"cartoon": {"color": "spectrum"}}
     )
+    # =====================================================
+    # GET POCKET RESIDUES
+    # =====================================================
+    
+    pocket_residues = []
+    
+    for atom in pocket_atoms:
+    
+        try:
+    
+            residue = atom.get_parent()
+    
+            resi = residue.id[1]
+    
+            if resi not in pocket_residues:
+    
+                pocket_residues.append(resi)
+    
+        except:
+            pass
 
-        # =====================================================
+    # =====================================================
     # POCKET SURFACE
     # =====================================================
     
