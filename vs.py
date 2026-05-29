@@ -43,6 +43,10 @@ st.set_page_config(
 # HIDE STREAMLIT HEADER + TOOLBAR
 # =========================================================
 
+# =========================================================
+# HIDE STREAMLIT HEADER + TOOLBAR
+# =========================================================
+
 st.markdown("""
 
 <style>
@@ -74,10 +78,14 @@ header {
     padding-top: 1rem;
 }
 
+/* Disable sidebar collapse button */
+[data-testid="collapsedControl"] {
+    display: none;
+}
+
 </style>
 
 """, unsafe_allow_html=True)
-
 # =========================================================
 # CUSTOM CSS
 # =========================================================
