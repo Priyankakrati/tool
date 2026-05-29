@@ -484,6 +484,39 @@ def show_structure(
             "color": "spectrum"
         }
     })
+    # =====================================================
+# CREATE POCKET SURFACE
+# =====================================================
+
+pocket_serials = []
+
+for atom in pocket_atoms:
+
+    try:
+        pocket_serials.append(
+            atom.serial_number
+        )
+
+    except:
+        pass
+
+# =====================================================
+# ADD SURFACE
+# =====================================================
+
+view.addSurface(
+
+    py3Dmol.VDW,
+
+    {
+        "opacity": 0.65,
+        "color": "cyan"
+    },
+
+    {
+        "serial": pocket_serials
+    }
+)
 
     # Pocket spheres
     for c in pocket_coords:
