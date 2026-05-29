@@ -170,10 +170,6 @@ def compute_curvature(coords):
 
     return eig[0] / eig[-1] if eig[-1] != 0 else 0
 
-# =========================================================
-# POCKET EXTRACTION
-# =========================================================
-
 def extract_pocket(pdb_path):
 
     parser = PDBParser(QUIET=True)
@@ -185,41 +181,86 @@ def extract_pocket(pdb_path):
 
     rna_atoms = []
 
-    phosphate_atoms = []
+    ligand_atoms = []
 
+    # =====================================================
+    # SEPARATE RNA AND LIGAND
+    # =====================================================
+
+    for atom in structure.get_atoms():
+
+        residue = atom.get_parent()
+
+        resname = residue.get_resname().strip()
+
+        # RNA residues
+        if resname in ["A", "U", "G", "C"]:
+
+            rna_atoms.append(atom)
+
+        # Ligand atoms
+        else:
+
+            if resname not in [
+
+                "HOH",
+                "WAT",
+                "MG",
+                "NA",
+                "K",
+                "CA",
+                "ZN"
+            ]:
+
+                ligand_atoms.append(atom)
+
+    # =====================================================
+    # KD-TREE NEIGHBOR SEARCH
+    # =====================================================
+
+    ns = NeighborSearch(rna_atoms)
+
+    pocket_atoms = set()
+
+    for latom in ligand_atoms:
+
+        neighbors = ns.search(
+
+            latom.coord,
+
+            6.0,
+
+            level='A'
+        )
+
+        for n in neighbors:
+
+            pocket_atoms.add(n)
+
+    # =====================================================
+    # POCKET COORDINATES
+    # =====================================================
+
+    pocket_coords = [
+
+        atom.coord
+
+        for atom in pocket_atoms
+    ]
+
+    phosphate_atoms = []
     oxygen_atoms = []
 
-    for model in structure:
-
-        for chain in model:
-
-            for res in chain:
-
-                if res.get_resname().strip() in RNA_RES:
-
-                    for atom in res.get_atoms():
-
-                        rna_atoms.append(atom)
-
-                        atom_name = atom.get_name()
-
-                        if atom_name.startswith("P"):
-                            phosphate_atoms.append(atom)
-
-                        if atom_name.startswith("O"):
-                            oxygen_atoms.append(atom)
-
-    coords = np.array(
-        [a.coord for a in rna_atoms]
-    )
-
     return (
-        rna_atoms,
-        coords,
+
+        list(pocket_atoms),
+
+        pocket_coords,
+
         phosphate_atoms,
+
         oxygen_atoms
     )
-
 # =========================================================
 # FEATURE EXTRACTION
 # =========================================================
@@ -275,7 +316,7 @@ def compute_features(
     # =====================================================
     # POCKET DEPTH
     # =====================================================
-    
+    pocket_coords = np.array(pocket_coords)
     pocket_center = np.mean(
         pocket_coords,
         axis=0
@@ -476,29 +517,46 @@ def show_structure(
         {"model": -1},
         {"cartoon": {"color": "spectrum"}}
     )
+    # =====================================================
+    # GET POCKET RESIDUES
+    # =====================================================
+    
+    pocket_residues = []
+    
+    for atom in pocket_atoms:
+    
+        try:
+    
+            residue = atom.get_parent()
+    
+            resi = residue.id[1]
+    
+            if resi not in pocket_residues:
+    
+                pocket_residues.append(resi)
+    
+        except:
+            pass
 
     # =====================================================
-    # LOCAL POCKET ATOMS
+    # POCKET SURFACE
     # =====================================================
-
-    for coord in pocket_coords:
-
-        view.addSphere({
-
-            "center": {
-
-                "x": float(coord[0]),
-                "y": float(coord[1]),
-                "z": float(coord[2])
-            },
-
-            "radius": 0.45,
-
-            "color": "cyan",
-
-            "alpha": 0.75
-        })
-
+    
+    view.addSurface(
+    
+        py3Dmol.VDW,
+    
+        {
+    
+            "opacity": 0.70,
+            "color": "cyan"
+        },
+    
+        {
+    
+            "resi": pocket_residues
+        }
+    )
     # =====================================================
     # ZOOM TO POCKET
     # =====================================================
@@ -792,7 +850,70 @@ elif page == "Run Prediction":
             view._make_html(),
             height=700
         )
+    # =====================================================
+    # POCKET INFORMATION
+    # =====================================================
+    
+            # =====================================================
+        # POCKET INFORMATION
+        # =====================================================
 
+        st.subheader("Pocket Residue Information")
+
+        # =====================================================
+        # FINAL UNIQUE POCKET RESIDUES
+        # =====================================================
+
+        unique_residues = {}
+
+        for atom in pocket_atoms:
+
+            try:
+
+                residue = atom.get_parent()
+
+                chain = residue.get_parent().id
+
+                resi = residue.id[1]
+
+                key = (chain, resi)
+
+                if key not in unique_residues:
+
+                    coord = (
+                        residue["P"].coord
+                        if "P" in residue
+                        else atom.coord
+                    )
+
+                    unique_residues[key] = {
+
+                        "Chain": chain,
+
+                        "Residue": resi,
+
+                        "X": round(float(coord[0]), 2),
+
+                        "Y": round(float(coord[1]), 2),
+
+                        "Z": round(float(coord[2]), 2)
+                    }
+
+            except:
+                pass
+
+        # =====================================================
+        # CREATE FINAL DATAFRAME
+        # =====================================================
+
+        info_df = pd.DataFrame(
+            list(unique_residues.values())
+        )
+
+        st.dataframe(
+            info_df,
+            use_container_width=True
+        )
     # =====================================================
     # RUN SCREENING
     # =====================================================
