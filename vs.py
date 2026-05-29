@@ -495,6 +495,7 @@ def lipinski(smiles):
 
 def show_structure(
     pdb_path,
+    pocket_atoms,
     pocket_coords,
     phosphate_atoms,
     oxygen_atoms,
@@ -518,185 +519,212 @@ def show_structure(
         {"model": -1},
         {"cartoon": {"color": "spectrum"}}
     )
-       # =====================================================
+
+    # =====================================================
     # SHOW LIGAND
     # =====================================================
-    
+
     view.setStyle(
-    
+
         {
-    
             "hetflag": True
-    
         },
-    
+
         {
-    
             "stick": {
-    
                 "colorscheme": "yellowCarbon",
                 "radius": 0.25
             }
         }
     )
-    
+
     # =====================================================
     # GET POCKET RESIDUES
     # =====================================================
-    
+
     pocket_residues = []
-    
+
     for atom in pocket_atoms:
-    
+
         try:
-    
+
             residue = atom.get_parent()
-    
+
             chain = residue.get_parent().id
-    
+
             resi = residue.id[1]
-    
+
             pocket_residues.append({
-    
+
                 "chain": chain,
-    
+
                 "resi": str(resi)
             })
-    
+
         except:
             pass
-    
+
     # =====================================================
     # LOCAL POCKET SURFACE
     # =====================================================
-if show_surface:
-    
-    for res in pocket_residues:
-    
-        view.addSurface(
-    
-            py3Dmol.VDW,
-    
-            {
-    
-                "opacity": 0.45,
-                "color": "cyan"
-            },
-    
-            {
-    
-                "chain": res["chain"],
-                "resi": res["resi"]
-            }
-        )
-            # =====================================================
+
+    if show_surface:
+
+        for res in pocket_residues:
+
+            view.addSurface(
+
+                py3Dmol.VDW,
+
+                {
+
+                    "opacity": 0.45,
+                    "color": "cyan"
+                },
+
+                {
+
+                    "chain": res["chain"],
+                    "resi": res["resi"]
+                }
+            )
+
+    # =====================================================
     # POCKET RESIDUE LABELS
     # =====================================================
-    
+
     shown_labels = set()
-    
+
     for atom in pocket_atoms:
-    
+
         try:
-    
+
             residue = atom.get_parent()
-    
+
             chain = residue.get_parent().id
-    
+
             resi = residue.id[1]
-    
+
             resname = residue.get_resname()
-    
+
             label = f"{chain}:{resname}{resi}"
-    
+
             # avoid duplicate labels
             if label in shown_labels:
                 continue
-    
+
             shown_labels.add(label)
-    
+
             coord = atom.coord
-    
+
             view.addLabel(
-    
+
                 label,
-    
+
                 {
-    
+
                     "position": {
-    
+
                         "x": float(coord[0]),
                         "y": float(coord[1]),
                         "z": float(coord[2])
                     },
-    
+
                     "backgroundColor": "white",
-    
+
                     "fontColor": "black",
-    
+
                     "fontSize": 10,
-    
+
                     "showBackground": True
                 }
             )
-    
-            except:
-                pass
-             # =====================================================
-            # HYDROGEN BOND INTERACTIONS
-            # =====================================================
-            
-            for patom in pocket_atoms:
-            
-                try:
-            
-                    p_element = patom.element
-            
-                    # Only N/O atoms
-                    if p_element not in ["N", "O"]:
-                        continue
-            
-                    for latom in ligand_atoms:
-            
-                        l_element = latom.element
-            
-                        if l_element not in ["N", "O"]:
-                            continue
-            
-                        dist = np.linalg.norm(
-            
-                            patom.coord - latom.coord
-                        )
-            
-                        # Hydrogen bond cutoff
-                        if dist <= 3.5:
-            
-                            view.addLine(
-            
-                                {
-            
-                                    "start": {
-            
-                                        "x": float(patom.coord[0]),
-                                        "y": float(patom.coord[1]),
-                                        "z": float(patom.coord[2])
-                                    },
-            
-                                    "end": {
-            
-                                        "x": float(latom.coord[0]),
-                                        "y": float(latom.coord[1]),
-                                        "z": float(latom.coord[2])
-                                    },
-            
-                                    "color": "green",
-            
-                                    "dashed": True
-                                }
-                            )
-            
-                    except:
-                        pass
+
+        except:
+            pass
+
+    # =====================================================
+    # HYDROGEN BOND INTERACTIONS
+    # =====================================================
+
+    ligand_atoms = []
+
+    parser = PDBParser(QUIET=True)
+
+    structure = parser.get_structure(
+        "RNA",
+        pdb_path
+    )
+
+    for atom in structure.get_atoms():
+
+        residue = atom.get_parent()
+
+        resname = residue.get_resname().strip()
+
+        if resname not in [
+
+            "A", "U", "G", "C",
+            "HOH", "WAT",
+            "MG", "NA", "K",
+            "CA", "ZN"
+
+        ]:
+
+            ligand_atoms.append(atom)
+
+    for patom in pocket_atoms:
+
+        try:
+
+            p_element = patom.element
+
+            # Only N/O atoms
+            if p_element not in ["N", "O"]:
+                continue
+
+            for latom in ligand_atoms:
+
+                l_element = latom.element
+
+                if l_element not in ["N", "O"]:
+                    continue
+
+                dist = np.linalg.norm(
+
+                    patom.coord - latom.coord
+                )
+
+                # Hydrogen bond cutoff
+                if dist <= 3.5:
+
+                    view.addLine(
+
+                        {
+
+                            "start": {
+
+                                "x": float(patom.coord[0]),
+                                "y": float(patom.coord[1]),
+                                "z": float(patom.coord[2])
+                            },
+
+                            "end": {
+
+                                "x": float(latom.coord[0]),
+                                "y": float(latom.coord[1]),
+                                "z": float(latom.coord[2])
+                            },
+
+                            "color": "green",
+
+                            "dashed": True
+                        }
+                    )
+
+        except:
+            pass
+
     # =====================================================
     # ZOOM TO POCKET
     # =====================================================
