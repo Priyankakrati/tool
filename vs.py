@@ -640,6 +640,61 @@ def show_structure(
     
         except:
             pass
+            # =====================================================
+        # HYDROGEN BOND INTERACTIONS
+        # =====================================================
+        
+        for patom in pocket_atoms:
+        
+            try:
+        
+                p_element = patom.element
+        
+                # Only N/O atoms
+                if p_element not in ["N", "O"]:
+                    continue
+        
+                for latom in ligand_atoms:
+        
+                    l_element = latom.element
+        
+                    if l_element not in ["N", "O"]:
+                        continue
+        
+                    dist = np.linalg.norm(
+        
+                        patom.coord - latom.coord
+                    )
+        
+                    # Hydrogen bond cutoff
+                    if dist <= 3.5:
+        
+                        view.addLine(
+        
+                            {
+        
+                                "start": {
+        
+                                    "x": float(patom.coord[0]),
+                                    "y": float(patom.coord[1]),
+                                    "z": float(patom.coord[2])
+                                },
+        
+                                "end": {
+        
+                                    "x": float(latom.coord[0]),
+                                    "y": float(latom.coord[1]),
+                                    "z": float(latom.coord[2])
+                                },
+        
+                                "color": "green",
+        
+                                "dashed": True
+                            }
+                        )
+        
+            except:
+                pass
     # =====================================================
     # ZOOM TO POCKET
     # =====================================================
