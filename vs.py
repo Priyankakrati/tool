@@ -543,7 +543,13 @@ def show_structure(
     
     for atom in pocket_atoms:
     
-        coord = atom.coord
+        try:
+    
+            coord = atom.coord
+    
+        except:
+    
+            coord = atom
     
         view.addSphere(
     
