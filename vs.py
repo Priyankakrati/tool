@@ -594,32 +594,7 @@ def show_structure(
         except:
             pass
 
-    # =====================================================
-    # LOCAL POCKET REPRESENTATION
-    # =====================================================
-        
-                {
-    
-                    "chain": res["chain"],
-                    "resi": res["resi"]
-                },
-    
-                {
-    
-                    "stick": {
-    
-                        "colorscheme": "cyanCarbon",
-                        "radius": 0.20
-                    },
-    
-                    "sphere": {
-    
-                        "color": "cyan",
-                        "radius": 0.35,
-                        "opacity": 0.55
-                    }
-                }
-            
+      
     # =====================================================
     # POCKET RESIDUE LABELS
     # =====================================================
