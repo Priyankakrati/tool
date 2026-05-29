@@ -498,8 +498,7 @@ def show_structure(
     pocket_atoms,
     pocket_coords,
     phosphate_atoms,
-    oxygen_atoms,
-    show_surface=True
+    oxygen_atoms
 ):
 
     # =====================================================
