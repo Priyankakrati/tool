@@ -170,10 +170,6 @@ def compute_curvature(coords):
 
     return eig[0] / eig[-1] if eig[-1] != 0 else 0
 
-# =========================================================
-# POCKET EXTRACTION
-# =========================================================
-
 def extract_pocket(pdb_path):
 
     parser = PDBParser(QUIET=True)
@@ -185,41 +181,86 @@ def extract_pocket(pdb_path):
 
     rna_atoms = []
 
-    phosphate_atoms = []
+    ligand_atoms = []
 
+    # =====================================================
+    # SEPARATE RNA AND LIGAND
+    # =====================================================
+
+    for atom in structure.get_atoms():
+
+        residue = atom.get_parent()
+
+        resname = residue.get_resname().strip()
+
+        # RNA residues
+        if resname in ["A", "U", "G", "C"]:
+
+            rna_atoms.append(atom)
+
+        # Ligand atoms
+        else:
+
+            if resname not in [
+
+                "HOH",
+                "WAT",
+                "MG",
+                "NA",
+                "K",
+                "CA",
+                "ZN"
+            ]:
+
+                ligand_atoms.append(atom)
+
+    # =====================================================
+    # KD-TREE NEIGHBOR SEARCH
+    # =====================================================
+
+    ns = NeighborSearch(rna_atoms)
+
+    pocket_atoms = set()
+
+    for latom in ligand_atoms:
+
+        neighbors = ns.search(
+
+            latom.coord,
+
+            6.0,
+
+            level='A'
+        )
+
+        for n in neighbors:
+
+            pocket_atoms.add(n)
+
+    # =====================================================
+    # POCKET COORDINATES
+    # =====================================================
+
+    pocket_coords = [
+
+        atom.coord
+
+        for atom in pocket_atoms
+    ]
+
+    phosphate_atoms = []
     oxygen_atoms = []
 
-    for model in structure:
-
-        for chain in model:
-
-            for res in chain:
-
-                if res.get_resname().strip() in RNA_RES:
-
-                    for atom in res.get_atoms():
-
-                        rna_atoms.append(atom)
-
-                        atom_name = atom.get_name()
-
-                        if atom_name.startswith("P"):
-                            phosphate_atoms.append(atom)
-
-                        if atom_name.startswith("O"):
-                            oxygen_atoms.append(atom)
-
-    coords = np.array(
-        [a.coord for a in rna_atoms]
-    )
-
     return (
-        rna_atoms,
-        coords,
+
+        list(pocket_atoms),
+
+        pocket_coords,
+
         phosphate_atoms,
+
         oxygen_atoms
     )
-
 # =========================================================
 # FEATURE EXTRACTION
 # =========================================================
