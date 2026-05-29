@@ -854,57 +854,66 @@ elif page == "Run Prediction":
     # POCKET INFORMATION
     # =====================================================
     
-    st.subheader("Pocket Residue Information")
-    
+            # =====================================================
+        # POCKET INFORMATION
         # =====================================================
-    # FINAL UNIQUE POCKET RESIDUES
-    # =====================================================
-    
-    unique_residues = {}
-    
-    for atom in pocket_atoms:
-    
-        try:
-    
-            residue = atom.get_parent()
-    
-            chain = residue.get_parent().id
-    
-            resi = residue.id[1]
-    
-            key = (chain, resi)
-    
-            if key not in unique_residues:
-    
-                coord = residue["P"].coord \
-                    if "P" in residue \
-                    else atom.coord
-    
-                unique_residues[key] = {
-    
-                    "Chain": chain,
-    
-                    "Residue": resi,
-    
-                    "X": round(float(coord[0]), 2),
-    
-                    "Y": round(float(coord[1]), 2),
-    
-                    "Z": round(float(coord[2]), 2)
-                }
-    
-        except:
-            pass
 
-# =====================================================
-# CREATE FINAL DATAFRAME
-# =====================================================
+        st.subheader("Pocket Residue Information")
 
-info_df = pd.DataFrame(
+        # =====================================================
+        # FINAL UNIQUE POCKET RESIDUES
+        # =====================================================
 
-    list(unique_residues.values())
-)
+        unique_residues = {}
 
+        for atom in pocket_atoms:
+
+            try:
+
+                residue = atom.get_parent()
+
+                chain = residue.get_parent().id
+
+                resi = residue.id[1]
+
+                key = (chain, resi)
+
+                if key not in unique_residues:
+
+                    coord = (
+                        residue["P"].coord
+                        if "P" in residue
+                        else atom.coord
+                    )
+
+                    unique_residues[key] = {
+
+                        "Chain": chain,
+
+                        "Residue": resi,
+
+                        "X": round(float(coord[0]), 2),
+
+                        "Y": round(float(coord[1]), 2),
+
+                        "Z": round(float(coord[2]), 2)
+                    }
+
+            except:
+                pass
+
+        # =====================================================
+        # CREATE FINAL DATAFRAME
+        # =====================================================
+
+        info_df = pd.DataFrame(
+            list(unique_residues.values())
+        )
+
+        st.dataframe(
+            info_df,
+            use_container_width=True
+        )
     # =====================================================
     # RUN SCREENING
     # =====================================================
