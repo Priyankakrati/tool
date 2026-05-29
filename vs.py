@@ -587,59 +587,59 @@ def show_structure(
                 "resi": res["resi"]
             }
         )
-        # =====================================================
-# POCKET RESIDUE LABELS
-# =====================================================
-
-shown_labels = set()
-
-for atom in pocket_atoms:
-
-    try:
-
-        residue = atom.get_parent()
-
-        chain = residue.get_parent().id
-
-        resi = residue.id[1]
-
-        resname = residue.get_resname()
-
-        label = f"{chain}:{resname}{resi}"
-
-        # avoid duplicate labels
-        if label in shown_labels:
-            continue
-
-        shown_labels.add(label)
-
-        coord = atom.coord
-
-        view.addLabel(
-
-            label,
-
-            {
-
-                "position": {
-
-                    "x": float(coord[0]),
-                    "y": float(coord[1]),
-                    "z": float(coord[2])
-                },
-
-                "backgroundColor": "white",
-
-                "fontColor": "black",
-
-                "fontSize": 10,
-
-                "showBackground": True
-            }
-        )
-
-    except:
-        pass
+            # =====================================================
+    # POCKET RESIDUE LABELS
+    # =====================================================
+    
+    shown_labels = set()
+    
+    for atom in pocket_atoms:
+    
+        try:
+    
+            residue = atom.get_parent()
+    
+            chain = residue.get_parent().id
+    
+            resi = residue.id[1]
+    
+            resname = residue.get_resname()
+    
+            label = f"{chain}:{resname}{resi}"
+    
+            # avoid duplicate labels
+            if label in shown_labels:
+                continue
+    
+            shown_labels.add(label)
+    
+            coord = atom.coord
+    
+            view.addLabel(
+    
+                label,
+    
+                {
+    
+                    "position": {
+    
+                        "x": float(coord[0]),
+                        "y": float(coord[1]),
+                        "z": float(coord[2])
+                    },
+    
+                    "backgroundColor": "white",
+    
+                    "fontColor": "black",
+    
+                    "fontSize": 10,
+    
+                    "showBackground": True
+                }
+            )
+    
+        except:
+            pass
     # =====================================================
     # ZOOM TO POCKET
     # =====================================================
