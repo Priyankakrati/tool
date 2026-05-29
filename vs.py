@@ -452,60 +452,55 @@ def lipinski(smiles):
             rdMolDescriptors.CalcNumRotatableBonds(mol)
     }
 
-# =========================================================
-# VISUALIZATION
-# =========================================================
+# =====================================================
+# CREATE VIEWER
+# =====================================================
 
-def show_structure(
-    pdb_path,
-    pocket_coords,
-    phosphate_atoms,
-    oxygen_atoms
-):
+view = py3Dmol.view(width=950, height=700)
 
-    with open(pdb_path) as f:
+with open(pdb_path, "r") as f:
+    view.addModel(f.read(), "pdb")
 
-        pdb_data = f.read()
+# =====================================================
+# RNA CARTOON
+# =====================================================
 
-    view = py3Dmol.view(
-        width=950,
-        height=700
-    )
+view.setStyle(
+    {"model": -1},
+    {"cartoon": {"color": "spectrum"}}
+)
 
-    view.addModel(
-        pdb_data,
-        "pdb"
-    )
+# =====================================================
+# LOCAL POCKET SURFACE
+# =====================================================
 
-    view.setStyle({
+for coord in pocket_coords:
 
-        "cartoon": {
+    view.addSphere({
 
-            "color": "spectrum"
-        }
+        "center": {
+
+            "x": float(coord[0]),
+            "y": float(coord[1]),
+            "z": float(coord[2])
+        },
+
+        "radius": 0.45,
+
+        "color": "cyan",
+
+        "alpha": 0.75
     })
-      # =====================================================
-    # SHOW ONLY LOCAL POCKET ATOMS
-    # =====================================================
-    
-    for coord in pocket_coords:
-    
-        view.addSphere({
-    
-            "center": {
-    
-                "x": float(coord[0]),
-                "y": float(coord[1]),
-                "z": float(coord[2])
-            },
-    
-            "radius": 0.45,
-    
-            "color": "cyan",
-    
-            "alpha": 0.75
-        })     
 
+# =====================================================
+# ZOOM TO POCKET
+# =====================================================
+
+view.zoomTo()
+
+view.setBackgroundColor("white")
+
+return view
 # =========================================================
 # HOME PAGE
 # =========================================================
