@@ -583,7 +583,7 @@ def show_structure(
                 },
 
                 {
-
+                    "model": -1,
                     "chain": res["chain"],
                     "resi": res["resi"]
                 }
@@ -615,7 +615,7 @@ def show_structure(
 
             shown_labels.add(label)
 
-            coord = atom.coord
+            coord = residue["P"].coord if "P" in residue else atom.coord 
 
             view.addLabel(
 
