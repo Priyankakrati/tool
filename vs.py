@@ -539,25 +539,28 @@ def show_structure(
         }
     )
         # =====================================================
-    # LOCAL BINDING POCKET SURFACE
+    # LOCAL POCKET SURFACE
     # =====================================================
     
-    view.addSurface(
+    for res in pocket_residues:
     
-        py3Dmol.VDW,
+        view.addSurface(
     
-        {
+            py3Dmol.VDW,
     
-            "opacity": 0.45,
-            "color": "cyan"
-        },
+            {
     
-        {
+                "opacity": 0.45,
+                "color": "cyan"
+            },
     
-            "hetflag": False
-        }
-    )
-    # =====================================================
+            {
+    
+                "chain": res["chain"],
+                "resi": res["resi"]
+            }
+        )
+            # =====================================================
     # GET POCKET RESIDUES
     # =====================================================
     
@@ -569,15 +572,18 @@ def show_structure(
     
             residue = atom.get_parent()
     
+            chain = residue.get_parent().id
+    
             resi = residue.id[1]
     
-            if resi not in pocket_residues:
+            pocket_residues.append({
     
-                pocket_residues.append(resi)
+                "chain": chain,
+                "resi": str(resi)
+            })
     
         except:
             pass
-
     # =====================================================
     # POCKET SURFACE
     # =====================================================
