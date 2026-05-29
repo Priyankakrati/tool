@@ -316,7 +316,7 @@ def compute_features(
     # =====================================================
     # POCKET DEPTH
     # =====================================================
-    
+    pocket_coords = np.array(pocket_coords)
     pocket_center = np.mean(
         pocket_coords,
         axis=0
