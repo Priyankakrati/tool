@@ -518,28 +518,25 @@ def show_structure(
         {"cartoon": {"color": "spectrum"}}
     )
 
+        # =====================================================
+    # POCKET SURFACE
     # =====================================================
-    # LOCAL POCKET ATOMS
-    # =====================================================
-
-    for coord in pocket_coords:
-
-        view.addSphere({
-
-            "center": {
-
-                "x": float(coord[0]),
-                "y": float(coord[1]),
-                "z": float(coord[2])
-            },
-
-            "radius": 0.45,
-
-            "color": "cyan",
-
-            "alpha": 0.75
-        })
-
+    
+    view.addSurface(
+    
+        py3Dmol.VDW,
+    
+        {
+    
+            "opacity": 0.70,
+            "color": "cyan"
+        },
+    
+        {
+    
+            "resi": pocket_residues
+        }
+    )
     # =====================================================
     # ZOOM TO POCKET
     # =====================================================
