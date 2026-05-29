@@ -452,55 +452,62 @@ def lipinski(smiles):
             rdMolDescriptors.CalcNumRotatableBonds(mol)
     }
 
-# =====================================================
-# CREATE VIEWER
-# =====================================================
+def show_structure(
+    pdb_path,
+    pocket_coords,
+    phosphate_atoms,
+    oxygen_atoms
+):
 
-view = py3Dmol.view(width=950, height=700)
+    # =====================================================
+    # CREATE VIEWER
+    # =====================================================
 
-with open(pdb_path, "r") as f:
-    view.addModel(f.read(), "pdb")
+    view = py3Dmol.view(width=950, height=700)
 
-# =====================================================
-# RNA CARTOON
-# =====================================================
+    with open(pdb_path, "r") as f:
+        view.addModel(f.read(), "pdb")
 
-view.setStyle(
-    {"model": -1},
-    {"cartoon": {"color": "spectrum"}}
-)
+    # =====================================================
+    # RNA CARTOON
+    # =====================================================
 
-# =====================================================
-# LOCAL POCKET SURFACE
-# =====================================================
+    view.setStyle(
+        {"model": -1},
+        {"cartoon": {"color": "spectrum"}}
+    )
 
-for coord in pocket_coords:
+    # =====================================================
+    # LOCAL POCKET ATOMS
+    # =====================================================
 
-    view.addSphere({
+    for coord in pocket_coords:
 
-        "center": {
+        view.addSphere({
 
-            "x": float(coord[0]),
-            "y": float(coord[1]),
-            "z": float(coord[2])
-        },
+            "center": {
 
-        "radius": 0.45,
+                "x": float(coord[0]),
+                "y": float(coord[1]),
+                "z": float(coord[2])
+            },
 
-        "color": "cyan",
+            "radius": 0.45,
 
-        "alpha": 0.75
-    })
+            "color": "cyan",
 
-# =====================================================
-# ZOOM TO POCKET
-# =====================================================
+            "alpha": 0.75
+        })
 
-view.zoomTo()
+    # =====================================================
+    # ZOOM TO POCKET
+    # =====================================================
 
-view.setBackgroundColor("white")
+    view.zoomTo()
 
-return view
+    view.setBackgroundColor("white")
+
+    return view
 # =========================================================
 # HOME PAGE
 # =========================================================
