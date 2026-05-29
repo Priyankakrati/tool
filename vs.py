@@ -1044,30 +1044,20 @@ elif page == "Run Prediction":
         ) = extract_pocket(pdb_path)
 
         st.subheader("RNA Binding Pocket")
-        show_surface = st.checkbox(
-    
-         "Show Pocket Surface",
-    
-        value=True
-       )
-
+       
         view = show_structure(
             pdb_path,
             pocket_coords,
             phosphate_atoms,
-            oxygen_atoms,
-            show_surface
+            oxygen_atoms
         )
 
         components.html(
             view._make_html(),
             height=700
         )
-    # =====================================================
-    # POCKET INFORMATION
-    # =====================================================
-    
-            # =====================================================
+  
+        # =====================================================
         # POCKET INFORMATION
         # =====================================================
 
