@@ -705,7 +705,7 @@ if show_surface:
 
     view.setBackgroundColor("white")
 
-    return view
+          return view
 # =========================================================
 # HOME PAGE
 # =========================================================
