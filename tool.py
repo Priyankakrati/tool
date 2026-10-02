@@ -790,18 +790,9 @@ if page == "Home":
     # METRICS
     # =====================================================
 
-    c1, c2, c3 = st.columns(3)
+    c1, c2 = st.columns(2)
 
     with c1:
-
-        st.markdown("""
-        <div class='metric-box'>
-        <h4>Screening Strategy</h4>
-        <h1>Docking-Free</h1>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with c2:
 
         st.markdown("""
         <div class='metric-box'>
@@ -810,7 +801,7 @@ if page == "Home":
         </div>
         """, unsafe_allow_html=True)
 
-    with c3:
+    with c2:
 
         st.markdown("""
         <div class='metric-box'>
