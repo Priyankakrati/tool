@@ -75,7 +75,7 @@ header {
 }
 
 /* Keep sidebar always expanded */
-[data-testid="stSidebar"][aria-expanded="false"] {
+[data-testid="stSidebar"][aria-expanded="true"] {
     min-width: 260px;
     max-width: 260px;
     transform: translateX(0%);
