@@ -74,17 +74,13 @@ header {
     padding-top: 1rem;
 }
 
-/* FORCE SIDEBAR TO BE PERMANENT AND NON-COMPRESSIBLE */
-[data-testid="stSidebar"] {
-    min-width: 260px !important;
-    max-width: 260px !important;
+/* Keep sidebar always expanded */
+[data-testid="stSidebar"][aria-expanded="false"] {
+    min-width: 260px;
+    max-width: 260px;
+    transform: translateX(0%);
 }
 
-/* Hide the sidebar collapse/expand button */
-[data-testid="collapsedControl"],
-[data-testid="stSidebarCollapseButton"] {
-    display: none !important;
-}
 
 </style>
 
