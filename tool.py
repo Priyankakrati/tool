@@ -36,7 +36,7 @@ st.set_page_config(
     page_title="RNALigVS",
     page_icon="logo.png",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="expanded"
 )
 
 # =========================================================
@@ -74,12 +74,54 @@ header {
     padding-top: 1rem;
 }
 
-/* Keep sidebar always expanded */
-[data-testid="stSidebar"][aria-expanded="false"] {
-    min-width: 260px;
-    max-width: 260px;
-    transform: translateX(0%);
+
+/* ==========================================
+   PERMANENT SIDEBAR - RNALigVS
+   ========================================== */
+
+/* Force sidebar to remain visible */
+section[data-testid="stSidebar"] {
+    display: block !important;
+    visibility: visible !important;
+
+    width: 260px !important;
+    min-width: 260px !important;
+    max-width: 260px !important;
+
+    transform: none !important;
+    position: relative !important;
 }
+
+/* Prevent collapsed sidebar state */
+section[data-testid="stSidebar"][aria-expanded="false"] {
+    display: block !important;
+
+    width: 260px !important;
+    min-width: 260px !important;
+    max-width: 260px !important;
+
+    transform: none !important;
+    margin-left: 0 !important;
+}
+
+/* Hide collapse and expand buttons */
+[data-testid="stSidebarCollapseButton"],
+[data-testid="collapsedControl"] {
+    display: none !important;
+    visibility: hidden !important;
+}
+
+/* Keep sidebar content visible */
+section[data-testid="stSidebar"] > div {
+    width: 260px !important;
+    min-width: 260px !important;
+}
+
+/* Prevent main content from overlapping sidebar */
+[data-testid="stAppViewContainer"] {
+    overflow: visible !important;
+}
+
 
 
 </style>
