@@ -985,42 +985,18 @@ if page == "Home":
     """, unsafe_allow_html=True)
 
     # =====================================================
-    # APPLICATIONS
+    # Citation
     # =====================================================
 
     st.markdown("""
     <div class='feature-card'>
 
-    <h2>Applications</h2>
+    <h2>Citation</h2>
 
     <ul style='font-size:17px; line-height:1.9;'>
 
     <li>
-    RNA-targeted drug discovery
-    </li>
-
-    <li>
-    Riboswitch ligand identification
-    </li>
-
-    <li>
-    Antiviral RNA therapeutic screening
-    </li>
-
-    <li>
-    Non-coding RNA targeting
-    </li>
-
-    <li>
-    High-throughput virtual screening
-    </li>
-
-    <li>
-    RNA structural biology research
-    </li>
-
-    <li>
-    Physics-informed ligand prioritization
+    To be updated
     </li>
 
     </ul>
