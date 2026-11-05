@@ -1555,8 +1555,7 @@ elif page == "Tutorial":
     developed for rapid identification of RNA-targeting
     small molecules using structure-guided interaction
     descriptors.
-
-    ---
+    
     """)
 
 
