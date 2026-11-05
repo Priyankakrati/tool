@@ -985,23 +985,6 @@ if page == "Home":
     """, unsafe_allow_html=True)
 
 
-    # =====================================================
-    # Citation
-    # =====================================================
-
-    st.markdown("""
-    <div class='feature-card'>
-
-    <h2>Citation</h2>
-
-    <ul style='font-size:17px; line-height:1.9;'>
-
-    <li>
-    To be updated soon
-    </li>
-
-
-
 # =========================================================
 # SESSION STATE
 # =========================================================
@@ -1550,15 +1533,14 @@ elif page == "Tutorial":
 
     st.markdown("""
     ## Welcome to RNALigVS
-    
-    RNALigVS is an RNA Ligand Virtual Screening platform
+
+    RNALigVS is an RNA–Ligand Virtual Screening platform
     developed for rapid identification of RNA-targeting
     small molecules using structure-guided interaction
     descriptors.
-    
+
     ---
     """)
-
 
     st.header("Step 1 — Upload RNA Structure")
 
