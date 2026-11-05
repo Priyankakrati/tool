@@ -1551,7 +1551,7 @@ elif page == "Tutorial":
     st.markdown("""
     ## Welcome to RNALigVS
 
-    RNALigVS is an RNA – Ligand Virtual Screening platform
+    RNALigVS is an RNA–Ligand Virtual Screening platform
     developed for rapid identification of RNA-targeting
     small molecules using structure-guided interaction
     descriptors.
