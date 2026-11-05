@@ -993,11 +993,8 @@ if page == "Home":
 
     <h2>Citation</h2>
 
-    <ul style='font-size:17px; line-height:1.9;'>
-
-    <li>
-    To be updated
-    </li>
+    <p style='font-size:17px; line-height:1.8;'>
+    to be updated
 
     </ul>
 
