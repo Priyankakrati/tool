@@ -994,7 +994,8 @@ if page == "Home":
     <h2>Citation</h2>
 
     <p style='font-size:17px; line-height:1.8;'>
-    to be updated
+
+    Priyanka Sharma, N.Latha, Pradeep Pant, Biochemistry 2026 (Ahead of publication)
 
     </ul>
 
