@@ -817,12 +817,12 @@ if page == "Home":
 
         st.markdown("""
         <div style='font-size:18px; line-height:1.8;'>
-        RNALigVS is a docking-free, physics-informed RNA-focused virtual
+        RNALigVS is an RNA-focused virtual
         screening framework developed for rapid identification of
         RNA-targeting small molecules. The platform integrates RNA
         structural information with ligand physicochemical descriptors
         to estimate RNA–ligand interaction probability using an
-        interpretable weighted scoring function.
+        interpretable scoring function.
         </div>
         """, unsafe_allow_html=True)
 
